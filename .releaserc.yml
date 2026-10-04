@@ -1,0 +1,32 @@
+branches:
+  - main
+  - "+([0-9])?(.{+([0-9]),x}).x"   # maintenance branches: 1.x, 2.x, etc.
+
+plugins:
+  - - "@semantic-release/commit-analyzer"
+    - preset: conventionalcommits
+      releaseRules:
+        # Docs are part of the published artifact for a Terraform Registry
+        # module — the Registry renders README/example docs from the tag, so a
+        # docs-only change must cut a release to actually reach consumers.
+        - type: docs
+          release: patch
+  - - "@semantic-release/release-notes-generator"
+    - preset: conventionalcommits
+      presetConfig:
+        types:
+          - type: feat
+            section: Features
+          - type: fix
+            section: Bug Fixes
+          - type: perf
+            section: Performance Improvements
+          - type: docs
+            section: Documentation
+  - - "@semantic-release/changelog"
+    - changelogFile: CHANGELOG.md
+  - - "@semantic-release/github"
+  - - "@semantic-release/git"
+    - assets:
+        - CHANGELOG.md
+      message: "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
