@@ -1,0 +1,24 @@
+{
+  "name": "terraform-aws-x402-edge-handler",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generic x402 Lambda@Edge handler (origin-request verify, origin-response settle). Config is read at runtime from config.json, which the Terraform module adds to the deployment zip.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --minify --outfile=../assets/edge/index.js --external:@aws-sdk/*",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@x402/core": "2.27.0",
+    "@x402/evm": "2.27.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.163",
+    "@types/node": "22.20.4",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}
