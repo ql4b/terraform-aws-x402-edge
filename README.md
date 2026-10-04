@@ -188,7 +188,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Requirements
 
 | Name | Version |
-| ---- | ------- |
+|------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4 |
 | <a name="requirement_archive"></a> [archive](#requirement\_archive) | >= 2.4 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0 |
@@ -196,21 +196,21 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Providers
 
 | Name | Version |
-| ---- | ------- |
-| <a name="provider_archive"></a> [archive](#provider\_archive) | 2.8.1 |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.67.0 |
+|------|---------|
+| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.4 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
-| ---- | ------ | ------- |
+|------|--------|---------|
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 
 ## Resources
 
 | Name | Type |
-| ---- | ---- |
+|------|------|
 | [aws_cloudfront_origin_request_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_request_policy) | resource |
 | [aws_iam_role.edge](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy_attachment.edge_basic](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
@@ -223,7 +223,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-| ---- | ----------- | ---- | ------- | :------: |
+|------|-------------|------|---------|:--------:|
 | <a name="input_facilitator_url"></a> [facilitator\_url](#input\_facilitator\_url) | Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator. | `string` | n/a | yes |
 | <a name="input_network"></a> [network](#input\_network) | EVM network for payments, as a CAIP-2 id (e.g. `eip155:8453` for Base mainnet, `eip155:84532` for Base Sepolia). The bundled handler registers only the EVM `exact` scheme, so non-EVM networks are rejected. | `string` | n/a | yes |
 | <a name="input_pay_to"></a> [pay\_to](#input\_pay\_to) | Receiving wallet address (the seller). Every paid route settles to this address. | `string` | n/a | yes |
@@ -257,7 +257,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Outputs
 
 | Name | Description |
-| ---- | ----------- |
+|------|-------------|
 | <a name="output_cache_policy_id"></a> [cache\_policy\_id](#output\_cache\_policy\_id) | ID of the managed CachingDisabled cache policy. Paid behaviors must use it: a cache hit skips the origin-request function and would serve paid content unverified. |
 | <a name="output_config_json"></a> [config\_json](#output\_config\_json) | The rendered config.json shipped in the edge zip, for inspection and debugging. |
 | <a name="output_function_names"></a> [function\_names](#output\_function\_names) | Names of the edge functions, keyed by event type. Logs are written to /aws/lambda/us-east-1.<name> in the region nearest each viewer. |
