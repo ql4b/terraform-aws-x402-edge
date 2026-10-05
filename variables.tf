@@ -4,7 +4,7 @@
 
 variable "facilitator_url" {
   type        = string
-  description = "Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator."
+  description = "Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network` and must accept unauthenticated requests: facilitators that require an API key (e.g. Coinbase CDP) are not supported yet (see issue #2). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator."
 
   validation {
     condition     = can(regex("^https://[^/]+", var.facilitator_url))
