@@ -103,6 +103,21 @@ next to the generic handler (`assets/edge/index.js`). The handler fails at cold
 start if the config is missing or invalid, rather than serving the origin
 unpaid. Inspect the rendered file with the `config_json` output.
 
+## Facilitators
+
+The facilitator must accept **unauthenticated** requests. The handler sends no
+auth headers on `verify`, `settle` or `supported`, so facilitators that require
+an API key are not supported yet — this includes the Coinbase CDP facilitator.
+
+Unauthenticated facilitators such as `https://facilitator.payai.network` and
+`https://x402.org/facilitator` work as-is.
+
+Authenticated facilitators are planned for v1.1.0, tracked in
+[#2](https://github.com/ql4b/terraform-aws-x402-edge/issues/2). Lambda@Edge has
+no environment variables and `config.json` ends up in state and in the zip, so
+credentials will be read at runtime from a referenced secret, never passed by
+value.
+
 ## Routes
 
 `routes` is keyed by x402 route pattern:
