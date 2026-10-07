@@ -8,12 +8,13 @@
 
 import type { CloudFrontRequestEvent, CloudFrontRequestResult } from 'aws-lambda';
 import { createX402Middleware, MiddlewareResultType, type LambdaEdgeResponse } from './lib';
-import { FACILITATOR_URL, ROUTES, PUBLIC_HOST } from './config';
+import { FACILITATOR_URL, ROUTES, PUBLIC_HOST, SUPPORTED } from './config';
 
 const x402 = createX402Middleware({
   facilitatorUrl: FACILITATOR_URL,
   routes: ROUTES,
   publicHost: PUBLIC_HOST,
+  supported: SUPPORTED,
 });
 
 export const handler = async (

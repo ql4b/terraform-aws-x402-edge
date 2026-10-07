@@ -87,8 +87,27 @@ variable "routes" {
 }
 
 # ---------------------------------------------------------------------------
-# Forwarding to the origin
+# Cold-start optimization
 # ---------------------------------------------------------------------------
+
+variable "bake_supported" {
+  type        = bool
+  description = <<-EOT
+    Fetch the facilitator's `/supported` response at plan time and bake it into
+    config.json, so the edge functions do not call `GET /supported` on cold
+    start. That call is the single blocking network round trip that dominates
+    Lambda@Edge cold-start latency; verify and settle still reach the
+    facilitator at request time.
+
+    Default false keeps the live fetch (current behaviour). When true, the
+    plan performs an HTTP GET to the facilitator's `/supported` endpoint, so it
+    must be reachable and unauthenticated at plan time (the same constraint the
+    handler already has). If the facilitator later stops advertising the
+    configured network/scheme, verify fails at request time until the next
+    apply re-bakes the value — the 402 challenge is unaffected.
+  EOT
+  default     = false
+}
 
 variable "forwarded_headers" {
   type        = list(string)
