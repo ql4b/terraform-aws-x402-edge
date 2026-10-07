@@ -67,41 +67,35 @@ latency:
 For a route, `/supported` contributes one small fact
 (`{"x402Version":2,"scheme":"exact","network":"eip155:8453"}`) and does not
 change the `exact` challenge — so none of this latency buys anything that
-isn't knowable at plan time. v1.1 removes every one of these calls from the
-request path.
+isn't knowable at plan time. `bake_supported` (v1.1.0, shipped) removes every
+one of these calls from the cold path; the measured result is below.
 
 ## Short term
 
-### v1.1 — static challenge
+### v1.1.0 — bake `/supported` at plan time (shipped)
 
-Flag: `static_challenge` (default `false` = current behaviour).
+Flag: `bake_supported` (default `false` = current behaviour).
 
-When `true`:
+When `true`, the facilitator's `/supported` response is fetched once at plan
+time (`data "http"`, with a 200 postcondition) and embedded in `config.json`.
+The handler serves it locally instead of calling `GET /supported` on cold
+start — the single blocking round trip that dominated cold-start latency.
+`verify`/`settle` still reach the facilitator; a stale baked value surfaces as
+a `verify` failure until the next apply, never serving unpaid.
 
-- A **viewer-request CloudFront Function** returns the 402 when
-  `payment-signature` is missing. The per-route challenge template is rendered
-  by the SDK at build/plan time and embedded in the function code;
-  `resource.url` is filled per request (length-capped). No key value store.
-- **origin-request / origin-response** skip `/supported`: the supported kind
-  is fetched at plan time into `config.json` and served by a stub
-  `getSupported()`.
-- Verify stays in origin-request (fail fast, origin untouched). Settle stays
-  in origin-response — only on origin `< 400`, and able to replace the
-  response with a 402 on failure (viewer-response cannot change the status
-  code).
+Measured on the Cloudless deployment after enabling it: unpaid-402 cold
+duration dropped to ~45–55 ms (from hundreds of ms, up to ~2 s from distant
+regions); Node init unchanged at ~150 ms. The remaining cold cost on the
+*paid* path is the `/verify` round trip, which this does not touch.
 
-Accepted limits: a facilitator dropping the kind between deploys surfaces as
-`/verify` failures until the next apply; a handful of routes per function
-(10 KB function code limit); no per-parameter pricing.
-
-### v1.2 — facilitator auth (CDP and keyed facilitators)
+### v1.2 — facilitator auth (CDP and keyed facilitators) — next
 
 Needed for the Coinbase CDP facilitator, and for PayAI once its starter
 allowance is used up.
 
 - Input: a Secrets Manager ARN (us-east-1). The module grants read access and
-  caches the secret per instance — one call on the cold *paid* path only; the
-  static 402 never needs it.
+  caches the secret per instance — one call on the cold *paid* path only; an
+  unpaid request never needs it.
 - Not the default: baking the key into the deployment zip (replicated to
   every edge region, readable via `lambda:GetFunction`).
 - Constraint, documented: **no IP allowlisting.** Lambda@Edge calls out from
@@ -109,6 +103,24 @@ allowance is used up.
   per-IP limits cannot be relied on.
 - Plan-time `/supported` for CDP needs a JWT-signing step, not a plain
   `data "http"`.
+
+## Considered, not committed
+
+### Static challenge at the viewer edge (valid; not scheduled)
+
+A **viewer-request CloudFront Function** would return the 402 when
+`payment-signature` is missing, with no cold start — removing the ~150 ms Node
+init that `bake_supported` leaves on unpaid requests. The per-route challenge
+would be rendered by the SDK at plan time and embedded in the function code
+(`resource.url` filled per request).
+
+Valid, but deliberately **not** on the TODO list yet. Open questions before it
+earns a slot: whether a second runtime at the edge is worth ~150 ms once
+`bake_supported` already removed the large cost; whether the challenge belongs
+in function code (10 KB limit, a few routes) or a rewrite to a static object;
+byte-exactness of a hand-assembled challenge vs. the SDK's; and whether the
+edge-side design survives a possible move to a regional origin colocated with
+the facilitator. Flagged here so the idea isn't lost, not as a commitment.
 
 ## Follow-up steps
 
