@@ -97,6 +97,10 @@ viewer -> CloudFront (paid behavior, CachingDisabled)
 A client that already knows the terms may send `PAYMENT-SIGNATURE` on its first
 request; the `402` round trip is optional.
 
+See [ROADMAP.md](ROADMAP.md) for the module's direction — the planned static
+challenge at the viewer edge, facilitator auth, and how the x402 Foundation
+working groups are expected to land.
+
 Lambda@Edge has no environment variables. The module renders `facilitator_url`,
 `network`, `pay_to`, `public_host` and `routes` into `config.json` and zips it
 next to the generic handler (`assets/edge/index.js`). The handler fails at cold
