@@ -1,3 +1,9 @@
+## 1.1.0 (2026-10-07)
+
+* docs: auto-update terraform-docs ([a33e5e6](https://github.com/ql4b/terraform-aws-x402-edge/commit/a33e5e6))
+* feat(cold-start): optional bake_supported to skip GET /supported at the edge (#4) ([f90b12e](https://github.com/ql4b/terraform-aws-x402-edge/commit/f90b12e)), closes [#4](https://github.com/ql4b/terraform-aws-x402-edge/issues/4)
+* chore: add ROADMAP and link it from README ([578dc22](https://github.com/ql4b/terraform-aws-x402-edge/commit/578dc22))
+
 ## <small>1.0.1 (2026-10-05)</small>
 
 * docs: auto-update terraform-docs ([9c26860](https://github.com/ql4b/terraform-aws-x402-edge/commit/9c26860))
