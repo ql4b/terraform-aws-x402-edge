@@ -16,6 +16,7 @@
  *   {
  *     "facilitatorUrl": "https://facilitator.payai.network",
  *     "publicHost":     "pay.example.com",          // optional
+ *     "supported":      { kinds, extensions, signers },  // optional (baked /supported)
  *     "routes":         { "<x402 route pattern>": RouteConfig, ... }
  *   }
  *
@@ -27,6 +28,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RoutesConfig } from '@x402/core/server';
+import type { SupportedResponse } from './lib/server';
 
 export interface EdgeConfig {
   /** x402 facilitator base URL. */
@@ -37,6 +39,12 @@ export interface EdgeConfig {
    * custom alias, so set this when a custom domain is attached.
    */
   publicHost?: string;
+  /**
+   * Optional pre-fetched facilitator `/supported` response. When present, the
+   * handler does not call `GET /supported` on cold start (the Terraform module
+   * fetched it at plan time). Omit to keep the live fetch.
+   */
+  supported?: SupportedResponse;
   /** Payment-gated routes (x402 RoutesConfig). */
   routes: RoutesConfig;
 }
@@ -64,6 +72,12 @@ function loadConfig(): EdgeConfig {
   if (c.publicHost !== undefined && typeof c.publicHost !== 'string') {
     throw new Error('x402 edge: config.json "publicHost" must be a string');
   }
+  if (c.supported !== undefined) {
+    const s = c.supported as Partial<SupportedResponse>;
+    if (!s || typeof s !== 'object' || !Array.isArray(s.kinds) || s.kinds.length === 0) {
+      throw new Error('x402 edge: config.json "supported" must have a non-empty "kinds" array');
+    }
+  }
   return c as EdgeConfig;
 }
 
@@ -72,4 +86,5 @@ export const CONFIG: EdgeConfig = loadConfig();
 // Named exports kept stable so the handlers are unchanged.
 export const FACILITATOR_URL = CONFIG.facilitatorUrl;
 export const PUBLIC_HOST = CONFIG.publicHost;
+export const SUPPORTED = CONFIG.supported;
 export const ROUTES: RoutesConfig = CONFIG.routes;

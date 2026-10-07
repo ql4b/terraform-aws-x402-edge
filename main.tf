@@ -29,6 +29,35 @@ resource "terraform_data" "region_guard" {
 }
 
 # ---------------------------------------------------------------------------
+# Optional plan-time /supported fetch (bake_supported)
+# ---------------------------------------------------------------------------
+
+# Fetch the facilitator's supported kinds at plan time so the handler can skip
+# the cold-start GET /supported. Only requested when bake_supported = true.
+data "http" "supported" {
+  count = var.bake_supported ? 1 : 0
+
+  url    = "${var.facilitator_url}/supported"
+  method = "GET"
+  request_headers = {
+    Accept = "application/json"
+  }
+
+  lifecycle {
+    postcondition {
+      condition     = self.status_code == 200
+      error_message = "bake_supported: GET ${var.facilitator_url}/supported returned ${self.status_code}, expected 200. The facilitator must be reachable and unauthenticated at plan time."
+    }
+  }
+}
+
+locals {
+  # Parsed /supported response, or null when not baking. jsondecode fails the
+  # plan loudly if the body is not JSON, which is the right outcome.
+  baked_supported = var.bake_supported ? jsondecode(data.http.supported[0].response_body) : null
+}
+
+# ---------------------------------------------------------------------------
 # Rendered handler config (config.json)
 # ---------------------------------------------------------------------------
 
@@ -63,6 +92,7 @@ locals {
       routes         = local.x402_routes
     },
     var.public_host == null ? {} : { publicHost = var.public_host },
+    local.baked_supported == null ? {} : { supported = local.baked_supported },
   )
 
   edge_config_json = jsonencode(local.edge_config)

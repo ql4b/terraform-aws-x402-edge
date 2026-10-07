@@ -11,6 +11,8 @@ mock_provider "aws" {
 
 mock_provider "archive" {}
 
+mock_provider "http" {}
+
 variables {
   namespace       = "test"
   name            = "shop"
@@ -98,6 +100,39 @@ run "unset_optionals_are_omitted" {
   assert {
     condition     = !contains(keys(jsondecode(output.config_json).routes["/api/premium/*"]), "extensions")
     error_message = "extensions must be omitted when extensions_json is null."
+  }
+
+  assert {
+    condition     = !contains(keys(jsondecode(output.config_json)), "supported")
+    error_message = "supported must be omitted when bake_supported is false (default)."
+  }
+}
+
+run "bake_supported_fetches_and_embeds_supported" {
+  command = plan
+
+  variables {
+    bake_supported = true
+  }
+
+  # Stand in for the facilitator's /supported response so the plan does not
+  # reach the network. The handler reads config.supported verbatim.
+  override_data {
+    target = data.http.supported[0]
+    values = {
+      status_code   = 200
+      response_body = "{\"kinds\":[{\"x402Version\":2,\"scheme\":\"exact\",\"network\":\"eip155:8453\"}],\"extensions\":[\"bazaar\"],\"signers\":{\"eip155:*\":[\"0xabc\"]}}"
+    }
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).supported.kinds[0].network == "eip155:8453"
+    error_message = "bake_supported must embed the fetched /supported kinds into config.json."
+  }
+
+  assert {
+    condition     = contains(jsondecode(output.config_json).supported.extensions, "bazaar")
+    error_message = "bake_supported must embed the facilitator extensions."
   }
 }
 
