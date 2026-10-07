@@ -1,3 +1,7 @@
+## <small>1.1.1 (2026-10-07)</small>
+
+* docs(roadmap): mark bake_supported shipped (v1.1.0), park static-challenge, CDP auth next ([ac70f95](https://github.com/ql4b/terraform-aws-x402-edge/commit/ac70f95))
+
 ## 1.1.0 (2026-10-07)
 
 * docs: auto-update terraform-docs ([a33e5e6](https://github.com/ql4b/terraform-aws-x402-edge/commit/a33e5e6))
