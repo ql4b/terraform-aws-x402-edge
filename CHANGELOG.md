@@ -1,3 +1,7 @@
+## <small>1.1.2 (2026-10-08)</small>
+
+* docs(roadmap): record relationship to AWS WAF Monetize ([63284c9](https://github.com/ql4b/terraform-aws-x402-edge/commit/63284c9))
+
 ## <small>1.1.1 (2026-10-07)</small>
 
 * docs(roadmap): mark bake_supported shipped (v1.1.0), park static-challenge, CDP auth next ([ac70f95](https://github.com/ql4b/terraform-aws-x402-edge/commit/ac70f95))
