@@ -32,6 +32,56 @@ Out of scope: a payment-aware regional origin (e.g. a function colocated with
 the facilitator). That serves a different case — new APIs, not retrofits —
 and belongs in a separate module.
 
+## Relationship to AWS WAF Monetize
+
+AWS WAF has a native x402 monetization action (`MonetizationConfig` + a
+`Monetize` rule with a `PriceMultiplier`). It emits a real x402 v2 `402`,
+verifies `PAYMENT-SIGNATURE`, and settles on a 2xx — overlapping this module on
+the basic flat-price case. It is the AWS-native alternative to this module for
+the same "Direct" retrofit pattern (CloudFront in front of an unchanged
+origin). This section records where they differ, honestly, so the module's
+reason to exist stays clear.
+
+Where WAF Monetize is the better choice:
+
+- You already run (or want) AWS WAF on the path, and a flat per-request price
+  fits the content.
+- You want a managed action rather than functions to maintain.
+- AWS's integrated facilitator is acceptable.
+
+Where this module differs:
+
+- **Facilitator choice.** This module is bring-your-own-facilitator (PayAI
+  today, keyed facilitators including CDP via the planned auth work). WAF
+  Monetize uses AWS's integrated facilitator. If a specific facilitator — or no
+  AWS payment dependency — matters, that is this module.
+- **No WAF, no per-request WAF fee.** WAF Monetize requires a WAF web ACL,
+  billed per evaluation on every request. On a cheap, high-volume route that
+  evaluation fee can dominate a sub-cent price. This module adds no WAF cost.
+- **Settle only on origin success.** This module settles in origin-response
+  **only when the origin returned `< 400`**, so a failed origin never charges
+  the client. WAF Monetize settles at request time against the quote; AWS's own
+  guidance flags settlement-then-delivery-failure as a case needing separate
+  handling. For a route whose origin can fail or return nothing, the
+  origin-response gate is a correctness advantage.
+
+Not a competitor on everything: WAF Monetize prices *per request, fixed before
+the response exists*. AWS's own "per-token" sample works around that with a
+viewer-response CloudFront Function that measures the response, signs a tier
+into a redirect path, and lets a `Monetize` rule scale the price — the same
+edge primitives (CloudFront Functions, KeyValueStore for the signing secret,
+HMAC in the CFF 2.0 runtime) this roadmap parks under "static challenge" and
+the key-value-store refresher. Response-weight pricing is a possible axis here
+too, but is not scheduled.
+
+External references (AWS Builder Center, 2026): "Keep your CDN: add CloudFront
+edge compute, WAF, and AI monetization" (the four overlay patterns —
+Redirect / Direct / Loop / Gate; this module is *Direct*), and "Per-Token
+Monetization of AI Traffic with AWS WAF and Amazon CloudFront" (the
+self-pricing workaround and the "beyond tokens" negotiation axes — client
+tiers via Web Bot Auth, license, freshness, QoS — which map to this project's
+automated-access research direction).
+
 ## Why the next step is needed
 
 A local trace of the v1.0 bundle (one route, facilitator in us-east-1, client
