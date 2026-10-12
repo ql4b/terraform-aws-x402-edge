@@ -4,7 +4,7 @@
 
 variable "facilitator_url" {
   type        = string
-  description = "Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network` and must accept unauthenticated requests: facilitators that require an API key (e.g. Coinbase CDP) are not supported yet (see issue #2). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator."
+  description = "Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. Facilitators that require an API key need `facilitator_auth` (Coinbase CDP: https://api.cdp.coinbase.com/platform/v2/x402). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator."
 
   validation {
     condition     = can(regex("^https://[^/]+", var.facilitator_url))
@@ -83,6 +83,51 @@ variable "routes" {
   validation {
     condition     = alltrue([for r in values(var.routes) : r.extensions_json == null || can(jsondecode(r.extensions_json))])
     error_message = "routes[*].extensions_json must be valid JSON (build it with jsonencode)."
+  }
+}
+
+variable "facilitator_auth" {
+  type = object({
+    type              = string                # "cdp" (Coinbase CDP API key)
+    secret_arn        = string                # full Secrets Manager secret ARN
+    cache_ttl_seconds = optional(number, 300) # how long a fetched value is reused
+  })
+  description = <<-EOT
+    Authenticate to a facilitator that requires an API key. Null (default) calls
+    the facilitator unauthenticated.
+
+    `type = "cdp"`: Coinbase CDP. The secret must be a JSON SecretString
+    `{"apiKeyId": "...", "apiKeySecret": "..."}` holding a CDP Secret API key
+    (Ed25519 base64 or EC P-256 PEM). Each verify/settle/supported call carries
+    a JWT signed with it, bound to that request and valid for 120 seconds.
+
+    Only the ARN is written to config.json. The edge functions read the value
+    with `secretsmanager:GetSecretValue` on first use and reuse it for
+    `cache_ttl_seconds`, so a rotated key is picked up without a redeploy. If
+    the secret cannot be read, origin-request answers 503 and never forwards to
+    the origin. The grant covers this secret name in any region (for future
+    replica reads); the value is read from the region in the ARN. A secret
+    encrypted with a customer managed KMS key also needs `kms:Decrypt` on that
+    key, which this module does not grant.
+
+    Not compatible with `bake_supported` (the plan-time /supported fetch is
+    unauthenticated).
+  EOT
+  default     = null
+
+  validation {
+    condition     = var.facilitator_auth == null || try(var.facilitator_auth.type == "cdp", false)
+    error_message = "facilitator_auth.type must be \"cdp\"."
+  }
+
+  validation {
+    condition     = var.facilitator_auth == null || can(regex("^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+-[A-Za-z0-9]{6}$", var.facilitator_auth.secret_arn))
+    error_message = "facilitator_auth.secret_arn must be a full Secrets Manager secret ARN, including the 6-character suffix (e.g. arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf)."
+  }
+
+  validation {
+    condition     = var.facilitator_auth == null || try(var.facilitator_auth.cache_ttl_seconds >= 0 && var.facilitator_auth.cache_ttl_seconds <= 3600, false)
+    error_message = "facilitator_auth.cache_ttl_seconds must be between 0 and 3600."
   }
 }
 

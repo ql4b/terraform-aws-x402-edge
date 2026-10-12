@@ -44,6 +44,11 @@ data "http" "supported" {
   }
 
   lifecycle {
+    precondition {
+      condition     = var.facilitator_auth == null
+      error_message = "bake_supported cannot be combined with facilitator_auth: the plan-time GET /supported is unauthenticated. Set bake_supported = false; the handler then fetches /supported (authenticated) on cold start."
+    }
+
     postcondition {
       condition     = self.status_code == 200
       error_message = "bake_supported: GET ${var.facilitator_url}/supported returned ${self.status_code}, expected 200. The facilitator must be reachable and unauthenticated at plan time."
@@ -93,6 +98,13 @@ locals {
     },
     var.public_host == null ? {} : { publicHost = var.public_host },
     local.baked_supported == null ? {} : { supported = local.baked_supported },
+    var.facilitator_auth == null ? {} : {
+      facilitatorAuth = {
+        type            = var.facilitator_auth.type
+        secretArn       = var.facilitator_auth.secret_arn
+        cacheTtlSeconds = var.facilitator_auth.cache_ttl_seconds
+      }
+    },
   )
 
   edge_config_json = jsonencode(local.edge_config)
@@ -140,6 +152,36 @@ resource "aws_iam_role" "edge" {
 resource "aws_iam_role_policy_attachment" "edge_basic" {
   role       = aws_iam_role.edge.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Facilitator credentials (facilitator_auth): read-only access to one secret.
+# The region segment is a wildcard so the same grant covers replicas of this
+# secret (same name and suffix) when reads move to the nearest region; v1
+# reads only from the region in the ARN.
+locals {
+  facilitator_secret_arn_parts = var.facilitator_auth == null ? [] : split(":", var.facilitator_auth.secret_arn)
+  facilitator_secret_resource = var.facilitator_auth == null ? null : join(":", concat(
+    slice(local.facilitator_secret_arn_parts, 0, 3),
+    ["*"],
+    slice(local.facilitator_secret_arn_parts, 4, length(local.facilitator_secret_arn_parts)),
+  ))
+}
+
+resource "aws_iam_role_policy" "facilitator_secret" {
+  count = var.facilitator_auth == null ? 0 : 1
+
+  name = "${module.this.id}-x402-facilitator-secret"
+  role = aws_iam_role.edge.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ReadFacilitatorSecret"
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = local.facilitator_secret_resource
+    }]
+  })
 }
 
 # ---------------------------------------------------------------------------

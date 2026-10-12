@@ -3,6 +3,7 @@ import type { x402HTTPResourceServer } from '@x402/core/server';
 import { CloudFrontHTTPAdapter } from './adapter';
 import { toLambdaResponse, LambdaEdgeResponse } from './responses';
 import { createX402Server, type X402ServerConfig } from './server';
+import { CredentialsUnavailableError } from './credentials';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -48,12 +49,26 @@ export type OriginResponseResult =
  */
 const PENDING_SETTLEMENT_HEADER = 'x-x402-pending-settlement';
 
+/** True when `error` (or anything in its `cause` chain) is a credentials failure. */
+function isCredentialsError(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e && depth < 5; e = (e as { cause?: unknown }).cause, depth++) {
+    if (e instanceof CredentialsUnavailableError) return true;
+  }
+  return false;
+}
+
 export function createX402Middleware(config: X402ServerConfig) {
   let serverPromise: Promise<x402HTTPResourceServer> | null = null;
 
   const getServer = async (): Promise<x402HTTPResourceServer> => {
     if (!serverPromise) {
-      serverPromise = createX402Server(config);
+      // Do not cache a failed initialization (e.g. facilitator or Secrets
+      // Manager briefly unreachable): the next request retries instead of the
+      // container failing every request until it is recycled.
+      serverPromise = createX402Server(config).catch((error) => {
+        serverPromise = null;
+        throw error;
+      });
     }
     return serverPromise;
   };
@@ -117,6 +132,19 @@ export function createX402Middleware(config: X402ServerConfig) {
       throw new Error('Unexpected result type');
     } catch (error) {
       console.error('x402 origin-request error:', error);
+      // Fail closed. Missing facilitator credentials are an availability
+      // problem on our side, not a payment problem: 503, never a 402 the
+      // client could act on, and never a pass-through to the origin.
+      if (isCredentialsError(error)) {
+        return {
+          type: MiddlewareResultType.RESPOND,
+          response: toLambdaResponse(
+            503,
+            { 'Content-Type': 'application/json', 'Retry-After': '5' },
+            { error: 'Payment service temporarily unavailable' }
+          ),
+        };
+      }
       return {
         type: MiddlewareResultType.RESPOND,
         response: toLambdaResponse(

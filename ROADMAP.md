@@ -138,21 +138,33 @@ duration dropped to ~45–55 ms (from hundreds of ms, up to ~2 s from distant
 regions); Node init unchanged at ~150 ms. The remaining cold cost on the
 *paid* path is the `/verify` round trip, which this does not touch.
 
-### v1.2 — facilitator auth (CDP and keyed facilitators) — next
+### v1.2 — facilitator auth (CDP) — in review
 
 Needed for the Coinbase CDP facilitator, and for PayAI once its starter
-allowance is used up.
+allowance is used up. v1.2 covers CDP (`facilitator_auth.type = "cdp"`); other
+keyed facilitators get their own `type` when needed.
 
-- Input: a Secrets Manager ARN (us-east-1). The module grants read access and
-  caches the secret per instance — one call on the cold *paid* path only; an
-  unpaid request never needs it.
+- Input: a Secrets Manager ARN (`facilitator_auth.secret_arn`). The module
+  grants `GetSecretValue` on that secret in any region and the handler caches
+  the value per instance for `cache_ttl_seconds` (default 300).
+- CDP JWTs (EdDSA / ES256) are signed with `node:crypto`; no CDP SDK in the
+  bundle. Checked for parity with `@coinbase/cdp-sdk` `generateJwt`.
+- Fail closed: an unreadable secret is a `503` at origin-request, never a
+  pass-through.
+- As shipped, the secret is read on every cold start, not only on the paid
+  path: CDP's `/supported` requires auth, so `bake_supported` is unavailable
+  and `initialize()` makes an authenticated `/supported` call.
+- Follow-up: read the nearest Secrets Manager replica, chosen by the execution
+  region (`AWS_REGION`) from a static map with the ARN's region as fallback —
+  only where the per-fetch latency logs show it is worth it. The IAM grant
+  already allows it.
 - Not the default: baking the key into the deployment zip (replicated to
   every edge region, readable via `lambda:GetFunction`).
 - Constraint, documented: **no IP allowlisting.** Lambda@Edge calls out from
   shared AWS ranges across many regions, so facilitator key allowlists and
   per-IP limits cannot be relied on.
 - Plan-time `/supported` for CDP needs a JWT-signing step, not a plain
-  `data "http"`.
+  `data "http"` (not done; this is what keeps `bake_supported` off for CDP).
 
 ## Considered, not committed
 

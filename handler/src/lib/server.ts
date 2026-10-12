@@ -1,6 +1,8 @@
 import type { RoutesConfig, FacilitatorConfig, FacilitatorClient } from '@x402/core/server';
 import { x402ResourceServer, x402HTTPResourceServer, HTTPFacilitatorClient } from '@x402/core/server';
 import { ExactEvmScheme } from '@x402/evm/exact/server';
+import { createCdpFacilitatorConfig } from './cdp-auth';
+import { createSecretSource } from './credentials';
 
 /**
  * Pre-fetched facilitator `/supported` response, typed as exactly what the
@@ -9,6 +11,20 @@ import { ExactEvmScheme } from '@x402/evm/exact/server';
  * `@x402/core/server` does not re-export the `SupportedResponse` type name.
  */
 export type SupportedResponse = Awaited<ReturnType<HTTPFacilitatorClient['getSupported']>>;
+
+/**
+ * Facilitator authentication. Only the secret ARN travels in config.json; the
+ * value is read from Secrets Manager at runtime and cached for
+ * `cacheTtlSeconds` (see credentials.ts).
+ */
+export interface FacilitatorAuthConfig {
+  /** Auth scheme. `cdp`: Coinbase CDP API key, per-request JWT (see cdp-auth.ts). */
+  type: 'cdp';
+  /** Full ARN of the Secrets Manager secret holding the API key. */
+  secretArn: string;
+  /** Seconds a fetched secret value is reused before re-fetching. */
+  cacheTtlSeconds: number;
+}
 
 /**
  * Configuration for creating an x402 server.
@@ -20,6 +36,11 @@ export interface X402ServerConfig {
   routes: RoutesConfig;
   /** Optional facilitator config with auth headers (for facilitators that require authentication) */
   facilitatorConfig?: FacilitatorConfig;
+  /**
+   * Optional facilitator authentication backed by Secrets Manager. Builds the
+   * `facilitatorConfig` when that is not given explicitly.
+   */
+  facilitatorAuth?: FacilitatorAuthConfig;
   /**
    * Optional pre-fetched facilitator `/supported` response, baked into
    * config.json at plan time. When present, the server does not call the
@@ -79,9 +100,7 @@ class BakedSupportedFacilitatorClient implements FacilitatorClient {
  * not called during `initialize()`; see BakedSupportedFacilitatorClient.
  */
 export async function createX402Server(config: X402ServerConfig): Promise<x402HTTPResourceServer> {
-  const httpClient = new HTTPFacilitatorClient(
-    config.facilitatorConfig ?? { url: config.facilitatorUrl }
-  );
+  const httpClient = new HTTPFacilitatorClient(facilitatorConfigFor(config));
   const facilitator: FacilitatorClient = config.supported
     ? new BakedSupportedFacilitatorClient(httpClient, config.supported)
     : httpClient;
@@ -95,4 +114,20 @@ export async function createX402Server(config: X402ServerConfig): Promise<x402HT
   await httpServer.initialize();
 
   return httpServer;
+}
+
+/** The facilitator client config: explicit, Secrets Manager-backed auth, or plain URL. */
+function facilitatorConfigFor(config: X402ServerConfig): FacilitatorConfig {
+  if (config.facilitatorConfig) {
+    return config.facilitatorConfig;
+  }
+  if (config.facilitatorAuth) {
+    // type is validated as 'cdp' when config.json is loaded.
+    const source = createSecretSource({
+      secretArn: config.facilitatorAuth.secretArn,
+      ttlSeconds: config.facilitatorAuth.cacheTtlSeconds,
+    });
+    return createCdpFacilitatorConfig(config.facilitatorUrl, source);
+  }
+  return { url: config.facilitatorUrl };
 }

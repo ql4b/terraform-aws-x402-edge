@@ -23,6 +23,10 @@ covers what a change to the module must not break, and how to check it.
 - **Settle only on origin success.** Origin-response settles only when the
   origin status is `< 400`; the pending-settlement header is stripped on every
   incoming request so a client cannot inject it.
+- **Facilitator secrets are referenced, never embedded.** `facilitator_auth`
+  puts only the secret ARN in `config.json`; the value is fetched at runtime
+  (`handler/src/lib/credentials.ts`) and never logged. A credentials failure at
+  origin-request is a `503`, never a pass-through or a `402`.
 - **Lambda@Edge constraints are not preferences.** us-east-1 provider (guarded
   by `terraform_data.region_guard`), `x86_64`, `publish = true` and qualified
   ARNs in outputs, trust for both `lambda` and `edgelambda`, timeout <= 30s,

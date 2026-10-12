@@ -17,6 +17,7 @@ Function URL, anything) stays unaware of payments.
 - **Config changes are plain applies** — changing a price, payee or route publishes a new function version
 - **Safe defaults enforced** — CachingDisabled for paid behaviors and an origin request policy that forwards `payment-signature`
 - **Discovery metadata per route** — description, MIME type, service name, tags, icon and x402 extensions (e.g. Bazaar)
+- **Keyed facilitators** — Coinbase CDP via an API key held in Secrets Manager (`facilitator_auth`), read at runtime and never baked into the zip
 
 ## Usage
 
@@ -109,18 +110,57 @@ unpaid. Inspect the rendered file with the `config_json` output.
 
 ## Facilitators
 
-The facilitator must accept **unauthenticated** requests. The handler sends no
-auth headers on `verify`, `settle` or `supported`, so facilitators that require
-an API key are not supported yet — this includes the Coinbase CDP facilitator.
-
 Unauthenticated facilitators such as `https://facilitator.payai.network` and
-`https://x402.org/facilitator` work as-is.
+`https://x402.org/facilitator` work as-is: set `facilitator_url` and nothing
+else.
 
-Authenticated facilitators are planned for v1.1.0, tracked in
-[#2](https://github.com/ql4b/terraform-aws-x402-edge/issues/2). Lambda@Edge has
-no environment variables and `config.json` ends up in state and in the zip, so
-credentials will be read at runtime from a referenced secret, never passed by
-value.
+### Coinbase CDP (`facilitator_auth`)
+
+The CDP facilitator requires every `verify`, `settle` and `supported` call to
+carry a JWT signed with a CDP Secret API key. Store the key in Secrets Manager
+and pass its ARN — never the value:
+
+```bash
+aws secretsmanager create-secret --region us-east-1 --name x402/cdp \
+  --secret-string '{"apiKeyId":"<CDP key id>","apiKeySecret":"<CDP key secret>"}'
+```
+
+```hcl
+module "x402_edge" {
+  # ...
+  facilitator_url = "https://api.cdp.coinbase.com/platform/v2/x402"
+  facilitator_auth = {
+    type       = "cdp"
+    secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+    # cache_ttl_seconds = 300
+  }
+}
+```
+
+- **Only the ARN is in the zip.** Lambda@Edge has no environment variables and
+  `config.json` ends up in state and in the deployment package, so the key is
+  read at runtime with `secretsmanager:GetSecretValue` (the module adds that
+  grant to the edge role) and reused for `cache_ttl_seconds`. A rotated key is
+  picked up after the TTL, without a redeploy.
+- **Both key types work**: Ed25519 (base64) and EC P-256 (PEM). JWTs are signed
+  in the handler with `node:crypto`, bound to the single request
+  (`uris: ["POST api.cdp.coinbase.com/platform/v2/x402/verify"]`) and valid for
+  120 seconds.
+- **Fails closed.** If the secret cannot be read or parsed, origin-request
+  returns `503` with `Retry-After` and never forwards to the origin. A failure
+  at settle time returns `402` and the client is not charged.
+- **Cold start cost.** Each new container makes one `GetSecretValue` call to the
+  secret's region, then an authenticated `GET /supported`. `bake_supported` is
+  not available with `facilitator_auth` (the plan-time fetch is
+  unauthenticated). Each fetch logs one line with the execution region and
+  latency (`x402 facilitator secret fetch`).
+- **Replicas.** The grant covers this secret name in any region, so adding
+  Secrets Manager replicas later needs no IAM change; v1 reads only from the
+  region in the ARN.
+- **KMS.** A secret encrypted with a customer managed key also needs
+  `kms:Decrypt` on that key; attach it to `role_arn` yourself.
+- **No IP allowlisting.** Lambda@Edge calls out from shared AWS ranges in many
+  regions, so do not rely on facilitator-side IP allowlists for this key.
 
 ## Routes
 
