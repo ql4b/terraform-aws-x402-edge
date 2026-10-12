@@ -162,6 +162,9 @@ module "x402_edge" {
 - **No IP allowlisting.** Lambda@Edge calls out from shared AWS ranges in many
   regions, so do not rely on facilitator-side IP allowlists for this key.
 
+A complete deployment, including creating the key and the secret, is in
+[`examples/cdp`](examples/cdp/).
+
 ## Routes
 
 `routes` is keyed by x402 route pattern:
