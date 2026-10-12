@@ -160,6 +160,101 @@ run "public_host_and_extensions_rendered_when_set" {
   }
 }
 
+# --- Facilitator auth (facilitator_auth) ---
+
+run "no_facilitator_auth_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(jsondecode(output.config_json)), "facilitatorAuth")
+    error_message = "facilitatorAuth must be omitted when facilitator_auth is null."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.facilitator_secret) == 0
+    error_message = "No secret grant without facilitator_auth."
+  }
+}
+
+run "cdp_facilitator_auth_renders_arn_and_grants_read" {
+  command = plan
+
+  variables {
+    facilitator_url = "https://api.cdp.coinbase.com/platform/v2/x402"
+    facilitator_auth = {
+      type       = "cdp"
+      secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+    }
+  }
+
+  assert {
+    condition = jsondecode(output.config_json).facilitatorAuth == {
+      type            = "cdp"
+      secretArn       = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+      cacheTtlSeconds = 300
+    }
+    error_message = "facilitatorAuth must carry type, the secret ARN and the default 300 s TTL."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.facilitator_secret[0].policy).Statement[0].Action == "secretsmanager:GetSecretValue"
+    error_message = "The grant must be GetSecretValue only."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.facilitator_secret[0].policy).Statement[0].Resource == "arn:aws:secretsmanager:*:123456789012:secret:x402/cdp-AbCdEf"
+    error_message = "The grant must cover exactly this secret, in any region (replicas)."
+  }
+}
+
+run "facilitator_auth_unknown_type_fails" {
+  command = plan
+
+  variables {
+    facilitator_auth = {
+      type       = "bearer"
+      secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+    }
+  }
+
+  expect_failures = [var.facilitator_auth]
+}
+
+run "facilitator_auth_partial_arn_fails" {
+  command = plan
+
+  variables {
+    facilitator_auth = {
+      type       = "cdp"
+      secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp"
+    }
+  }
+
+  expect_failures = [var.facilitator_auth]
+}
+
+run "facilitator_auth_with_bake_supported_fails" {
+  command = plan
+
+  variables {
+    bake_supported = true
+    facilitator_auth = {
+      type       = "cdp"
+      secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+    }
+  }
+
+  override_data {
+    target = data.http.supported[0]
+    values = {
+      status_code   = 200
+      response_body = "{\"kinds\":[{\"x402Version\":2,\"scheme\":\"exact\",\"network\":\"eip155:8453\"}]}"
+    }
+  }
+
+  expect_failures = [data.http.supported]
+}
+
 # --- Policies and associations ---
 
 run "origin_request_policy_forwards_payment_signature" {

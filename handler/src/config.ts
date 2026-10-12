@@ -17,6 +17,7 @@
  *     "facilitatorUrl": "https://facilitator.payai.network",
  *     "publicHost":     "pay.example.com",          // optional
  *     "supported":      { kinds, extensions, signers },  // optional (baked /supported)
+ *     "facilitatorAuth": { "type": "cdp", "secretArn": "arn:...", "cacheTtlSeconds": 300 },  // optional
  *     "routes":         { "<x402 route pattern>": RouteConfig, ... }
  *   }
  *
@@ -28,7 +29,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RoutesConfig } from '@x402/core/server';
-import type { SupportedResponse } from './lib/server';
+import type { FacilitatorAuthConfig, SupportedResponse } from './lib/server';
 
 export interface EdgeConfig {
   /** x402 facilitator base URL. */
@@ -45,6 +46,11 @@ export interface EdgeConfig {
    * fetched it at plan time). Omit to keep the live fetch.
    */
   supported?: SupportedResponse;
+  /**
+   * Optional facilitator authentication. Only the secret's ARN is in the zip;
+   * the value is read from Secrets Manager at runtime (see lib/credentials.ts).
+   */
+  facilitatorAuth?: FacilitatorAuthConfig;
   /** Payment-gated routes (x402 RoutesConfig). */
   routes: RoutesConfig;
 }
@@ -78,6 +84,18 @@ function loadConfig(): EdgeConfig {
       throw new Error('x402 edge: config.json "supported" must have a non-empty "kinds" array');
     }
   }
+  if (c.facilitatorAuth !== undefined) {
+    const a = c.facilitatorAuth as Partial<FacilitatorAuthConfig>;
+    if (!a || a.type !== 'cdp') {
+      throw new Error('x402 edge: config.json "facilitatorAuth.type" must be "cdp"');
+    }
+    if (typeof a.secretArn !== 'string' || !a.secretArn.startsWith('arn:')) {
+      throw new Error('x402 edge: config.json "facilitatorAuth.secretArn" must be a secret ARN');
+    }
+    if (typeof a.cacheTtlSeconds !== 'number' || a.cacheTtlSeconds < 0) {
+      throw new Error('x402 edge: config.json "facilitatorAuth.cacheTtlSeconds" must be a non-negative number');
+    }
+  }
   return c as EdgeConfig;
 }
 
@@ -87,4 +105,5 @@ export const CONFIG: EdgeConfig = loadConfig();
 export const FACILITATOR_URL = CONFIG.facilitatorUrl;
 export const PUBLIC_HOST = CONFIG.publicHost;
 export const SUPPORTED = CONFIG.supported;
+export const FACILITATOR_AUTH = CONFIG.facilitatorAuth;
 export const ROUTES: RoutesConfig = CONFIG.routes;
