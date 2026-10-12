@@ -1,3 +1,7 @@
+## <small>1.2.1 (2026-10-12)</small>
+
+* docs: add CDP facilitator example with Secrets Manager key (#6) ([f8de0ed](https://github.com/ql4b/terraform-aws-x402-edge/commit/f8de0ed)), closes [#6](https://github.com/ql4b/terraform-aws-x402-edge/issues/6)
+
 ## 1.2.0 (2026-10-12)
 
 * docs: auto-update terraform-docs ([6d79de2](https://github.com/ql4b/terraform-aws-x402-edge/commit/6d79de2))
