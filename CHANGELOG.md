@@ -1,3 +1,7 @@
+## <small>1.2.2 (2026-10-14)</small>
+
+* docs(roadmap): mark CDP facilitator auth shipped (v1.2.0) (#7) ([c1d7e4d](https://github.com/ql4b/terraform-aws-x402-edge/commit/c1d7e4d)), closes [#7](https://github.com/ql4b/terraform-aws-x402-edge/issues/7)
+
 ## <small>1.2.1 (2026-10-12)</small>
 
 * docs: add CDP facilitator example with Secrets Manager key (#6) ([f8de0ed](https://github.com/ql4b/terraform-aws-x402-edge/commit/f8de0ed)), closes [#6](https://github.com/ql4b/terraform-aws-x402-edge/issues/6)
