@@ -51,8 +51,9 @@ Where WAF Monetize is the better choice:
 
 Where this module differs:
 
-- **Facilitator choice.** This module is bring-your-own-facilitator (PayAI
-  today, keyed facilitators including CDP via the planned auth work). WAF
+- **Facilitator choice.** This module is bring-your-own-facilitator:
+  unauthenticated facilitators (PayAI, x402.org) as-is, and Coinbase CDP via
+  `facilitator_auth` (v1.2, key in Secrets Manager). WAF
   Monetize uses AWS's integrated facilitator. If a specific facilitator — or no
   AWS payment dependency — matters, that is this module.
 - **No WAF, no per-request WAF fee.** WAF Monetize requires a WAF web ACL,
@@ -138,7 +139,7 @@ duration dropped to ~45–55 ms (from hundreds of ms, up to ~2 s from distant
 regions); Node init unchanged at ~150 ms. The remaining cold cost on the
 *paid* path is the `/verify` round trip, which this does not touch.
 
-### v1.2 — facilitator auth (CDP) — in review
+### v1.2 — facilitator auth (CDP) — shipped (v1.2.0)
 
 Needed for the Coinbase CDP facilitator, and for PayAI once its starter
 allowance is used up. v1.2 covers CDP (`facilitator_auth.type = "cdp"`); other
