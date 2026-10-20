@@ -212,15 +212,3 @@ Roughly in order; each its own release.
 5. **Dynamic pricing switch.** Per-route opt-out of the static 402 for routes
    whose price depends on request parameters; their 402 is built at
    origin-request.
-
-## Foundation working groups
-
-How each is expected to land in the existing structure — revised as the
-groups produce specs.
-
-| Working group | Where it lands | Notes |
-| --- | --- | --- |
-| Identity | viewer-request, ahead of payment | Web Bot Auth verification against locally held keys is an edge decision. Payment is not authentication; the two gates stay separate and compose. |
-| Directory | static terms / discovery | The more terms are published and fixed in advance, the more of the 402 stays at the edge. |
-| Card acceptance | origin-request / origin-response | The draft binds cards to `auth-capture` `escrow`: the first `/settle` authorizes (origin-request), then `capture` on origin success or `void` on `>= 400` (origin-response). |
-| Tax | — | Not started. |
