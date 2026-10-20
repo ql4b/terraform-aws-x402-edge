@@ -1,3 +1,7 @@
+## <small>1.2.3 (2026-10-20)</small>
+
+* docs: roadmap cleanup and untrack roadmap file (#8) ([205cb7e](https://github.com/ql4b/terraform-aws-x402-edge/commit/205cb7e)), closes [#8](https://github.com/ql4b/terraform-aws-x402-edge/issues/8)
+
 ## <small>1.2.2 (2026-10-14)</small>
 
 * docs(roadmap): mark CDP facilitator auth shipped (v1.2.0) (#7) ([c1d7e4d](https://github.com/ql4b/terraform-aws-x402-edge/commit/c1d7e4d)), closes [#7](https://github.com/ql4b/terraform-aws-x402-edge/issues/7)
