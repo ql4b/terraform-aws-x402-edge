@@ -1,3 +1,7 @@
+## <small>1.2.4 (2026-11-10)</small>
+
+* docs: state the module's scope — retrofit, not a payment server (#12) ([0c300c2](https://github.com/ql4b/terraform-aws-x402-edge/commit/0c300c2)), closes [#12](https://github.com/ql4b/terraform-aws-x402-edge/issues/12)
+
 ## <small>1.2.3 (2026-10-20)</small>
 
 * docs: roadmap cleanup and untrack roadmap file (#8) ([205cb7e](https://github.com/ql4b/terraform-aws-x402-edge/commit/205cb7e)), closes [#8](https://github.com/ql4b/terraform-aws-x402-edge/issues/8)
