@@ -32,6 +32,16 @@ Out of scope: a payment-aware regional origin (e.g. a function colocated with
 the facilitator). That serves a different case — new APIs, not retrofits —
 and belongs in a separate module.
 
+**Customizing the payment flow is explicitly that separate case, not a planned
+edge feature.** The edge split runs verify and settle as two isolated
+Lambda@Edge invocations with no shared state, so anything that must remember
+something across the lifecycle — idempotency / retry de-duplication, spend caps,
+rate limiting, step-up challenges, auth-capture (authorize→capture→void) — has
+no home at the edge. Those belong to a stateful payment runtime, planned
+separately. The one exception that keeps the retrofit pure: idempotency the
+*facilitator* enforces on `/settle` needs no edge state, and is the only form of
+it that fits here.
+
 ## Relationship to AWS WAF Monetize
 
 AWS WAF has a native x402 monetization action (`MonetizationConfig` + a

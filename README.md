@@ -9,6 +9,23 @@ It does not create or own a distribution: you attach its outputs to the cache
 behaviors you want to charge for, and the origin behind them (S3, ALB, Lambda
 Function URL, anything) stays unaware of payments.
 
+## What this is — and is not
+
+This module **retrofits** x402 onto resources you already serve through
+CloudFront: attach two edge functions to cache behaviors you own, and paths
+that were free are now paid — no origin changes, no server to run.
+
+That's a deliberate trade. The flow is inline in the CDN request path (verify
+at origin-request, settle at origin-response), with no shared state between the
+two phases. So it does one thing well — **gate existing paths** — and nothing
+more.
+
+If you need to *customize the payment flow* — idempotency, spend caps, rate
+limiting, step-up challenges, the auth-capture authorize→capture→void lifecycle,
+anything that must remember state between verify and settle — you've outgrown
+the retrofit. That belongs in a stateful payment runtime: a different case (new
+APIs, not retrofits), a separate module. See the ROADMAP.
+
 ## Features
 
 - **Plugs into any distribution** — outputs `lambda_function_associations` for your own `ordered_cache_behavior` blocks
