@@ -7,13 +7,17 @@
 
 import type { CloudFrontResponseEvent, CloudFrontResponseResult } from 'aws-lambda';
 import { createX402Middleware, MiddlewareResultType, type LambdaEdgeResponse } from './lib';
-import { FACILITATOR_URL, ROUTES, SUPPORTED, FACILITATOR_AUTH } from './config';
+import { FACILITATOR_URL, ROUTES, PUBLIC_HOST, SUPPORTED, FACILITATOR_AUTH, OFFER_RECEIPT } from './config';
 
 const x402 = createX402Middleware({
   facilitatorUrl: FACILITATOR_URL,
   routes: ROUTES,
+  // publicHost is needed in origin-response too: the offer-receipt receipt hook
+  // rebuilds the request adapter to derive the receipt's resourceUrl.
+  publicHost: PUBLIC_HOST,
   supported: SUPPORTED,
   facilitatorAuth: FACILITATOR_AUTH,
+  offerReceipt: OFFER_RECEIPT,
 });
 
 export const handler = async (

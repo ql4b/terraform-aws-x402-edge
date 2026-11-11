@@ -14,7 +14,9 @@
   "dependencies": {
     "@x402/core": "2.27.0",
     "@x402/evm": "2.27.0",
-    "aws4fetch": "1.0.20"
+    "@x402/extensions": "2.27.0",
+    "aws4fetch": "1.0.20",
+    "ox": "0.14.45"
   },
   "devDependencies": {
     "@types/aws-lambda": "8.10.163",

@@ -255,6 +255,152 @@ run "facilitator_auth_with_bake_supported_fails" {
   expect_failures = [data.http.supported]
 }
 
+# --- Offer-receipt (offer_receipt) ---
+
+run "no_offer_receipt_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(jsondecode(output.config_json)), "offerReceipt")
+    error_message = "offerReceipt must be omitted when offer_receipt is null (default)."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.offer_receipt_secret) == 0
+    error_message = "No signing-key grant without offer_receipt."
+  }
+}
+
+run "offer_receipt_disabled_renders_nothing" {
+  command = plan
+
+  variables {
+    offer_receipt = {
+      enabled                = false
+      signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+    }
+  }
+
+  assert {
+    condition     = !contains(keys(jsondecode(output.config_json)), "offerReceipt")
+    error_message = "offer_receipt.enabled = false must render NO offerReceipt block (≡ off)."
+  }
+
+  assert {
+    condition     = length(aws_iam_role_policy.offer_receipt_secret) == 0
+    error_message = "offer_receipt.enabled = false must grant no IAM (≡ off)."
+  }
+}
+
+run "offer_receipt_enabled_renders_block_and_grants_read" {
+  command = plan
+
+  variables {
+    offer_receipt = {
+      enabled                = true
+      signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+    }
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.enabled == true
+    error_message = "offerReceipt.enabled must be true when enabled."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.format == "eip712"
+    error_message = "offerReceipt.format must default to eip712."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.signingKeySecretArn == "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+    error_message = "offerReceipt.signingKeySecretArn must carry the input ARN."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.kid == "did:web:x402.cloudless.sh#key-1"
+    error_message = "offerReceipt.kid must default to the published did:web key-1."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.signerDid == "did:web:x402.cloudless.sh"
+    error_message = "offerReceipt.signerDid must default to the published did:web."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.offerValiditySeconds == 300 && jsondecode(output.config_json).offerReceipt.cacheTtlSeconds == 300
+    error_message = "offerReceipt must carry the default 300 s validity and cache TTL."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.includeTxHash == false
+    error_message = "offerReceipt.includeTxHash must default to false."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.offer_receipt_secret[0].policy).Statement[0].Action == "secretsmanager:GetSecretValue"
+    error_message = "The signing-key grant must be GetSecretValue only."
+  }
+
+  assert {
+    condition     = jsondecode(aws_iam_role_policy.offer_receipt_secret[0].policy).Statement[0].Resource == "arn:aws:secretsmanager:*:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+    error_message = "The signing-key grant must cover exactly this secret, in any region (replicas)."
+  }
+}
+
+run "offer_receipt_custom_fields_rendered" {
+  command = plan
+
+  variables {
+    offer_receipt = {
+      enabled                = true
+      signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+      signer_did             = "did:web:api.example.com"
+      signer_kid             = "did:web:api.example.com#key-1"
+      include_tx_hash        = true
+      offer_validity_seconds = 600
+      cache_ttl_seconds      = 60
+    }
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.signerDid == "did:web:api.example.com" && jsondecode(output.config_json).offerReceipt.kid == "did:web:api.example.com#key-1"
+    error_message = "signer_did / signer_kid overrides must be rendered."
+  }
+
+  assert {
+    condition     = jsondecode(output.config_json).offerReceipt.includeTxHash == true && jsondecode(output.config_json).offerReceipt.offerValiditySeconds == 600 && jsondecode(output.config_json).offerReceipt.cacheTtlSeconds == 60
+    error_message = "include_tx_hash / offer_validity_seconds / cache_ttl_seconds overrides must be rendered."
+  }
+}
+
+run "offer_receipt_partial_arn_fails" {
+  command = plan
+
+  variables {
+    offer_receipt = {
+      enabled                = true
+      signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key"
+    }
+  }
+
+  expect_failures = [var.offer_receipt]
+}
+
+run "offer_receipt_bad_format_fails" {
+  command = plan
+
+  variables {
+    offer_receipt = {
+      enabled                = true
+      signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:cloudless-x402/offer-receipt-signing-key-AbCdEf"
+      format                 = "jws"
+    }
+  }
+
+  expect_failures = [var.offer_receipt]
+}
+
 # --- Policies and associations ---
 
 run "origin_request_policy_forwards_payment_signature" {
