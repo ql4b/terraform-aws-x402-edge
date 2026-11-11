@@ -1,3 +1,8 @@
+## 1.3.0 (2026-11-11)
+
+* docs: auto-update terraform-docs ([34f4715](https://github.com/ql4b/terraform-aws-x402-edge/commit/34f4715))
+* feat: optional Signed Offers & Receipts (offer-receipt extension), default off — v1.3.0 (#14) ([936318d](https://github.com/ql4b/terraform-aws-x402-edge/commit/936318d)), closes [#14](https://github.com/ql4b/terraform-aws-x402-edge/issues/14) [ql4b/terraform-aws-x402-edge#13](https://github.com/ql4b/terraform-aws-x402-edge/issues/13) [x402.cloudless.sh#key-1](https://github.com/x402.cloudless.sh/issues/key-1)
+
 ## <small>1.2.4 (2026-11-10)</small>
 
 * docs: state the module's scope — retrofit, not a payment server (#12) ([0c300c2](https://github.com/ql4b/terraform-aws-x402-edge/commit/0c300c2)), closes [#12](https://github.com/ql4b/terraform-aws-x402-edge/issues/12)
