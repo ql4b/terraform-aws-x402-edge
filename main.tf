@@ -108,7 +108,7 @@ locals {
     # Offer-receipt is opt-in. Gate strictly on `enabled` so a non-null but
     # disabled object renders NO offerReceipt key (≡ off). kid/signerDid default
     # to the published did:web constants so a minimal enable is interop-ready.
-    var.offer_receipt == null || !var.offer_receipt.enabled ? {} : {
+    !try(var.offer_receipt.enabled, false) ? {} : {
       offerReceipt = {
         enabled              = true
         format               = var.offer_receipt.format
@@ -203,8 +203,8 @@ resource "aws_iam_role_policy" "facilitator_secret" {
 # dedicated signing-key secret, only when the feature is enabled. Region
 # wildcarded exactly like the facilitator secret above; off ⇒ no new IAM.
 locals {
-  offer_receipt_secret_arn_parts = var.offer_receipt == null || !var.offer_receipt.enabled ? [] : split(":", var.offer_receipt.signing_key_secret_arn)
-  offer_receipt_secret_resource = var.offer_receipt == null || !var.offer_receipt.enabled ? null : join(":", concat(
+  offer_receipt_secret_arn_parts = !try(var.offer_receipt.enabled, false) ? [] : split(":", var.offer_receipt.signing_key_secret_arn)
+  offer_receipt_secret_resource = !try(var.offer_receipt.enabled, false) ? null : join(":", concat(
     slice(local.offer_receipt_secret_arn_parts, 0, 3),
     ["*"],
     slice(local.offer_receipt_secret_arn_parts, 4, length(local.offer_receipt_secret_arn_parts)),
@@ -212,7 +212,7 @@ locals {
 }
 
 resource "aws_iam_role_policy" "offer_receipt_secret" {
-  count = var.offer_receipt == null || !var.offer_receipt.enabled ? 0 : 1
+  count = !try(var.offer_receipt.enabled, false) ? 0 : 1
 
   name = "${module.this.id}-x402-offer-receipt-secret"
   role = aws_iam_role.edge.id
