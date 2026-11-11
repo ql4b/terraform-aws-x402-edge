@@ -131,6 +131,69 @@ variable "facilitator_auth" {
   }
 }
 
+variable "offer_receipt" {
+  type = object({
+    enabled                = optional(bool, false)      # master opt-in switch
+    signing_key_secret_arn = string                     # dedicated signing key secret, NOT pay_to
+    format                 = optional(string, "eip712") # only "eip712" is implemented on this surface
+    signer_did             = optional(string)           # e.g. "did:web:api.example.com"
+    signer_kid             = optional(string)           # verificationMethod id in the DID doc
+    include_tx_hash        = optional(bool, false)      # include the on-chain txHash in the receipt
+    offer_validity_seconds = optional(number, 300)      # offer validUntil window
+    cache_ttl_seconds      = optional(number, 300)      # signing-key secret cache, mirrors facilitator_auth
+  })
+  description = <<-EOT
+    Opt-in x402 "Signed Offers & Receipts". Null (default) ⇒ the feature is
+    entirely off: config.json gets no `offerReceipt` block, no new IAM is
+    granted, and the 402 challenge and settlement PAYMENT-RESPONSE are
+    byte-identical to today. Enabling it (`enabled = true`) makes the edge
+    functions sign an offer per `accepts[]` entry into the 402 body
+    `extensions` and a receipt into the PAYMENT-RESPONSE header on a settled
+    200.
+
+    `signing_key_secret_arn` MUST reference a DEDICATED signing key, SEPARATE
+    from `pay_to`. The secret holds a hex secp256k1 private key (0x-prefixed, or
+    a JSON `{"privateKey"|"signingKey": "0x..."}`). Only the ARN is written to
+    config.json; the value is read from Secrets Manager at runtime (same
+    SigV4/aws4fetch mechanism as `facilitator_auth`) and never enters Terraform
+    state. The secret MUST pre-exist; enabling grants the edge role one extra
+    `secretsmanager:GetSecretValue` on this ARN (region-wildcarded for future
+    replica reads), and nothing else.
+
+    `format = "eip712"` (the only value implemented here) uses secp256k1; the
+    verifier recovers the signer ADDRESS from the signature. The MODULE SIGNS
+    ONLY — it does NOT emit `/.well-known/did.json`. The consumer MUST host that
+    DID document themselves, listing the signer address as a
+    `verificationMethod` (type `EcdsaSecp256k1RecoveryMethod2020`,
+    `blockchainAccountId = "eip155:<chainId>:<address>"`) for `signer_did`, so
+    clients know which address to trust. `signer_kid` (default
+    `did:web:x402.cloudless.sh#key-1`) must equal that verificationMethod id;
+    it is metadata for EIP-712 (the verifier does not resolve it) but MUST match
+    the published DID doc.
+  EOT
+  default     = null
+
+  validation {
+    condition     = var.offer_receipt == null || can(regex("^arn:aws[a-z-]*:secretsmanager:[a-z0-9-]+:[0-9]{12}:secret:.+-[A-Za-z0-9]{6}$", var.offer_receipt.signing_key_secret_arn))
+    error_message = "offer_receipt.signing_key_secret_arn must be a full Secrets Manager secret ARN, including the 6-character suffix (e.g. arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/offer-receipt-signing-key-AbCdEf)."
+  }
+
+  validation {
+    condition     = var.offer_receipt == null || try(var.offer_receipt.format == "eip712", false)
+    error_message = "offer_receipt.format must be \"eip712\" (the only format implemented by the bundled handler)."
+  }
+
+  validation {
+    condition     = var.offer_receipt == null || try(var.offer_receipt.cache_ttl_seconds >= 0 && var.offer_receipt.cache_ttl_seconds <= 3600, false)
+    error_message = "offer_receipt.cache_ttl_seconds must be between 0 and 3600."
+  }
+
+  validation {
+    condition     = var.offer_receipt == null || try(var.offer_receipt.offer_validity_seconds > 0, false)
+    error_message = "offer_receipt.offer_validity_seconds must be a positive number of seconds."
+  }
+}
+
 # ---------------------------------------------------------------------------
 # Cold-start optimization
 # ---------------------------------------------------------------------------

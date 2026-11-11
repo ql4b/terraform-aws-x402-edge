@@ -35,6 +35,7 @@ APIs, not retrofits), a separate module. See the ROADMAP.
 - **Safe defaults enforced** — CachingDisabled for paid behaviors and an origin request policy that forwards `payment-signature`
 - **Discovery metadata per route** — description, MIME type, service name, tags, icon and x402 extensions (e.g. Bazaar)
 - **Keyed facilitators** — Coinbase CDP via an API key held in Secrets Manager (`facilitator_auth`), read at runtime and never baked into the zip
+- **Signed offers & receipts (opt-in)** — sign a verifiable offer per `accepts[]` into the 402 and a receipt into `PAYMENT-RESPONSE` (`offer_receipt`); default off, additive, signing key in Secrets Manager
 
 ## Usage
 
@@ -178,6 +179,84 @@ module "x402_edge" {
 A complete deployment, including creating the key and the secret, is in
 [`examples/cdp`](examples/cdp/).
 
+## Signed offers & receipts (opt-in)
+
+An opt-in [x402 "Signed Offers & Receipts"](https://docs.x402.org/extensions/offer-receipt)
+capability. When enabled (`offer_receipt.enabled = true`), the edge functions
+sign an **offer** per `accepts[]` entry into the 402 body `extensions`, and a
+**receipt** into the `PAYMENT-RESPONSE` header on a settled 200 — portable
+proof-of-interaction artifacts a client can verify, audit, or dispute.
+
+Default is **off**: `offer_receipt = null` (the default) means `config.json`
+gets no `offerReceipt` block, no extra IAM is granted, and the 402 challenge and
+settlement response are byte-identical to before. Enabling is purely additive;
+existing `~> 1.2` consumers are unaffected until they set the variable and move
+to `~> 1.3`.
+
+```hcl
+module "x402_edge" {
+  # ...
+  offer_receipt = {
+    enabled                = true
+    signing_key_secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/offer-receipt-signing-key-AbCdEf"
+    # signer_did           = "did:web:api.example.com"        # defaults to did:web:x402.cloudless.sh
+    # signer_kid           = "did:web:api.example.com#key-1"  # must equal the did.json verificationMethod id
+    # include_tx_hash      = false
+    # offer_validity_seconds = 300
+    # cache_ttl_seconds    = 300
+  }
+}
+```
+
+- **Dedicated signing key, in Secrets Manager, pre-existing.** The signing key
+  MUST be a DEDICATED secp256k1 key, **separate from `pay_to`** (signing identity
+  is not the payment address). Store the hex private key (0x-prefixed, or a JSON
+  `{"privateKey": "0x..."}`) in Secrets Manager and pass its ARN. The secret
+  MUST exist before you enable the feature. Only the ARN is written to
+  `config.json`; the value is read at runtime with `secretsmanager:GetSecretValue`
+  (enabling adds exactly one such grant, region-wildcarded like `facilitator_auth`)
+  and never enters Terraform state or the bundle.
+
+  ```bash
+  aws secretsmanager create-secret --region us-east-1 \
+    --name x402/offer-receipt-signing-key \
+    --secret-string '0x<64-hex-char dedicated signing key>'
+  ```
+
+- **You must host `/.well-known/did.json` yourself.** The module **signs only**;
+  it does NOT emit the DID document. For EIP-712 the verifier recovers the signer
+  ADDRESS from the signature and checks it against the address published in your
+  DID doc, so you MUST host one at `https://<signer_did host>/.well-known/did.json`
+  binding the signer key's address:
+
+  ```jsonc
+  {
+    "@context": [
+      "https://www.w3.org/ns/did/v1",
+      "https://w3id.org/security/suites/secp256k1recovery-2020/v2"
+    ],
+    "id": "did:web:api.example.com",
+    "verificationMethod": [{
+      "id": "did:web:api.example.com#key-1",          // must equal signer_kid
+      "type": "EcdsaSecp256k1RecoveryMethod2020",
+      "controller": "did:web:api.example.com",
+      "blockchainAccountId": "eip155:8453:0x<signer address>"   // CAIP-10, your chainId + signer address
+    }],
+    "assertionMethod": ["did:web:api.example.com#key-1"]
+  }
+  ```
+
+  `signer_kid` is metadata for EIP-712 (the verifier does not resolve it), but it
+  MUST equal the `verificationMethod.id` published here, and `blockchainAccountId`
+  MUST carry the signer key's address. If they do not match, clients reject the
+  signatures.
+
+- **Format.** Only `format = "eip712"` is implemented on this surface.
+- **Cold-start cost.** Enabling adds one cached `GetSecretValue` for the signing
+  key on the first invocation of a container (reused for `cache_ttl_seconds`);
+  signing itself is local CPU, no hot-path network call. The committed bundle
+  uses a lean `ox` secp256k1 signer (not `viem`) to limit size growth.
+
 ## Routes
 
 `routes` is keyed by x402 route pattern:
@@ -263,7 +342,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4 |
 | <a name="requirement_archive"></a> [archive](#requirement\_archive) | >= 2.4 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0 |
@@ -272,25 +351,26 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.4 |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0 |
-| <a name="provider_http"></a> [http](#provider\_http) | >= 3.4 |
+| ---- | ------- |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | 2.8.1 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.72.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.3 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_cloudfront_origin_request_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_request_policy) | resource |
 | [aws_iam_role.edge](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.facilitator_secret](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
+| [aws_iam_role_policy.offer_receipt_secret](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy_attachment.edge_basic](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_lambda_function.edge](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_function) | resource |
 | [terraform_data.region_guard](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
@@ -302,7 +382,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_facilitator_url"></a> [facilitator\_url](#input\_facilitator\_url) | Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. Facilitators that require an API key need `facilitator_auth` (Coinbase CDP: https://api.cdp.coinbase.com/platform/v2/x402). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator. | `string` | n/a | yes |
 | <a name="input_network"></a> [network](#input\_network) | EVM network for payments, as a CAIP-2 id (e.g. `eip155:8453` for Base mainnet, `eip155:84532` for Base Sepolia). The bundled handler registers only the EVM `exact` scheme, so non-EVM networks are rejected. | `string` | n/a | yes |
 | <a name="input_pay_to"></a> [pay\_to](#input\_pay\_to) | Receiving wallet address (the seller). Every paid route settles to this address. | `string` | n/a | yes |
@@ -327,6 +407,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 | <a name="input_memory_size"></a> [memory\_size](#input\_memory\_size) | Memory (MB) for both edge functions. | `number` | `256` | no |
 | <a name="input_name"></a> [name](#input\_name) | ID element. Usually the component or solution name, e.g. 'app' or 'jenkins'.<br/>This is the only ID element not also included as a `tag`.<br/>The "name" tag is set to the full `id` string. There is no tag with the value of the `name` input. | `string` | `null` | no |
 | <a name="input_namespace"></a> [namespace](#input\_namespace) | ID element. Usually an abbreviation of your organization name, e.g. 'eg' or 'cp', to help ensure generated IDs are globally unique | `string` | `null` | no |
+| <a name="input_offer_receipt"></a> [offer\_receipt](#input\_offer\_receipt) | Opt-in x402 "Signed Offers & Receipts". Null (default) ⇒ the feature is<br/>entirely off: config.json gets no `offerReceipt` block, no new IAM is<br/>granted, and the 402 challenge and settlement PAYMENT-RESPONSE are<br/>byte-identical to today. Enabling it (`enabled = true`) makes the edge<br/>functions sign an offer per `accepts[]` entry into the 402 body<br/>`extensions` and a receipt into the PAYMENT-RESPONSE header on a settled<br/>200.<br/><br/>`signing_key_secret_arn` MUST reference a DEDICATED signing key, SEPARATE<br/>from `pay_to`. The secret holds a hex secp256k1 private key (0x-prefixed, or<br/>a JSON `{"privateKey"|"signingKey": "0x..."}`). Only the ARN is written to<br/>config.json; the value is read from Secrets Manager at runtime (same<br/>SigV4/aws4fetch mechanism as `facilitator_auth`) and never enters Terraform<br/>state. The secret MUST pre-exist; enabling grants the edge role one extra<br/>`secretsmanager:GetSecretValue` on this ARN (region-wildcarded for future<br/>replica reads), and nothing else.<br/><br/>`format = "eip712"` (the only value implemented here) uses secp256k1; the<br/>verifier recovers the signer ADDRESS from the signature. The MODULE SIGNS<br/>ONLY — it does NOT emit `/.well-known/did.json`. The consumer MUST host that<br/>DID document themselves, listing the signer address as a<br/>`verificationMethod` (type `EcdsaSecp256k1RecoveryMethod2020`,<br/>`blockchainAccountId = "eip155:<chainId>:<address>"`) for `signer_did`, so<br/>clients know which address to trust. `signer_kid` (default<br/>`did:web:x402.cloudless.sh#key-1`) must equal that verificationMethod id;<br/>it is metadata for EIP-712 (the verifier does not resolve it) but MUST match<br/>the published DID doc. | <pre>object({<br/>    enabled                = optional(bool, false)      # master opt-in switch<br/>    signing_key_secret_arn = string                     # dedicated signing key secret, NOT pay_to<br/>    format                 = optional(string, "eip712") # only "eip712" is implemented on this surface<br/>    signer_did             = optional(string)           # e.g. "did:web:api.example.com"<br/>    signer_kid             = optional(string)           # verificationMethod id in the DID doc<br/>    include_tx_hash        = optional(bool, false)      # include the on-chain txHash in the receipt<br/>    offer_validity_seconds = optional(number, 300)      # offer validUntil window<br/>    cache_ttl_seconds      = optional(number, 300)      # signing-key secret cache, mirrors facilitator_auth<br/>  })</pre> | `null` | no |
 | <a name="input_public_host"></a> [public\_host](#input\_public\_host) | Public host name advertised in the challenge `resource.url` (e.g. `api.example.com`). Lambda@Edge only sees the `*.cloudfront.net` distribution domain, so set this when the distribution has a custom alias. Leave null to advertise the CloudFront domain. | `string` | `null` | no |
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_runtime"></a> [runtime](#input\_runtime) | Node.js runtime for both edge functions. The bundled handler targets Node.js 22. | `string` | `"nodejs22.x"` | no |
@@ -338,7 +419,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_cache_policy_id"></a> [cache\_policy\_id](#output\_cache\_policy\_id) | ID of the managed CachingDisabled cache policy. Paid behaviors must use it: a cache hit skips the origin-request function and would serve paid content unverified. |
 | <a name="output_config_json"></a> [config\_json](#output\_config\_json) | The rendered config.json shipped in the edge zip, for inspection and debugging. |
 | <a name="output_function_names"></a> [function\_names](#output\_function\_names) | Names of the edge functions, keyed by event type. Logs are written to /aws/lambda/us-east-1.<name> in the region nearest each viewer. |

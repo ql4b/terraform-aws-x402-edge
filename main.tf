@@ -105,6 +105,21 @@ locals {
         cacheTtlSeconds = var.facilitator_auth.cache_ttl_seconds
       }
     },
+    # Offer-receipt is opt-in. Gate strictly on `enabled` so a non-null but
+    # disabled object renders NO offerReceipt key (≡ off). kid/signerDid default
+    # to the published did:web constants so a minimal enable is interop-ready.
+    var.offer_receipt == null || !var.offer_receipt.enabled ? {} : {
+      offerReceipt = {
+        enabled              = true
+        format               = var.offer_receipt.format
+        signingKeySecretArn  = var.offer_receipt.signing_key_secret_arn
+        signerDid            = coalesce(var.offer_receipt.signer_did, "did:web:x402.cloudless.sh")
+        kid                  = coalesce(var.offer_receipt.signer_kid, "did:web:x402.cloudless.sh#key-1")
+        includeTxHash        = var.offer_receipt.include_tx_hash
+        offerValiditySeconds = var.offer_receipt.offer_validity_seconds
+        cacheTtlSeconds      = var.offer_receipt.cache_ttl_seconds
+      }
+    },
   )
 
   edge_config_json = jsonencode(local.edge_config)
@@ -180,6 +195,35 @@ resource "aws_iam_role_policy" "facilitator_secret" {
       Effect   = "Allow"
       Action   = "secretsmanager:GetSecretValue"
       Resource = local.facilitator_secret_resource
+    }]
+  })
+}
+
+# Offer-receipt signing key (offer_receipt): a SECOND read-only grant on the
+# dedicated signing-key secret, only when the feature is enabled. Region
+# wildcarded exactly like the facilitator secret above; off ⇒ no new IAM.
+locals {
+  offer_receipt_secret_arn_parts = var.offer_receipt == null || !var.offer_receipt.enabled ? [] : split(":", var.offer_receipt.signing_key_secret_arn)
+  offer_receipt_secret_resource = var.offer_receipt == null || !var.offer_receipt.enabled ? null : join(":", concat(
+    slice(local.offer_receipt_secret_arn_parts, 0, 3),
+    ["*"],
+    slice(local.offer_receipt_secret_arn_parts, 4, length(local.offer_receipt_secret_arn_parts)),
+  ))
+}
+
+resource "aws_iam_role_policy" "offer_receipt_secret" {
+  count = var.offer_receipt == null || !var.offer_receipt.enabled ? 0 : 1
+
+  name = "${module.this.id}-x402-offer-receipt-secret"
+  role = aws_iam_role.edge.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ReadOfferReceiptSigningSecret"
+      Effect   = "Allow"
+      Action   = "secretsmanager:GetSecretValue"
+      Resource = local.offer_receipt_secret_resource
     }]
   })
 }

@@ -18,6 +18,9 @@
  *     "publicHost":     "pay.example.com",          // optional
  *     "supported":      { kinds, extensions, signers },  // optional (baked /supported)
  *     "facilitatorAuth": { "type": "cdp", "secretArn": "arn:...", "cacheTtlSeconds": 300 },  // optional
+ *     "offerReceipt":   { "enabled": true, "format": "eip712", "signingKeySecretArn": "arn:...",
+ *                         "signerDid": "did:web:...", "kid": "did:web:...#key-1",
+ *                         "includeTxHash": false, "offerValiditySeconds": 300, "cacheTtlSeconds": 300 },  // optional
  *     "routes":         { "<x402 route pattern>": RouteConfig, ... }
  *   }
  *
@@ -29,7 +32,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { RoutesConfig } from '@x402/core/server';
-import type { FacilitatorAuthConfig, SupportedResponse } from './lib/server';
+import type { FacilitatorAuthConfig, OfferReceiptEdgeConfig, SupportedResponse } from './lib/server';
 
 export interface EdgeConfig {
   /** x402 facilitator base URL. */
@@ -51,6 +54,12 @@ export interface EdgeConfig {
    * the value is read from Secrets Manager at runtime (see lib/credentials.ts).
    */
   facilitatorAuth?: FacilitatorAuthConfig;
+  /**
+   * Optional opt-in x402 Signed Offers & Receipts. Only the signing-key secret
+   * ARN is in the zip; the hex key is read from Secrets Manager at runtime.
+   * Absent ⇒ no offers or receipts are signed (byte-identical to today).
+   */
+  offerReceipt?: OfferReceiptEdgeConfig;
   /** Payment-gated routes (x402 RoutesConfig). */
   routes: RoutesConfig;
 }
@@ -96,6 +105,29 @@ function loadConfig(): EdgeConfig {
       throw new Error('x402 edge: config.json "facilitatorAuth.cacheTtlSeconds" must be a non-negative number');
     }
   }
+  if (c.offerReceipt !== undefined) {
+    const o = c.offerReceipt as Partial<OfferReceiptEdgeConfig>;
+    if (!o || typeof o.enabled !== 'boolean') {
+      throw new Error('x402 edge: config.json "offerReceipt.enabled" must be a boolean');
+    }
+    if (o.enabled) {
+      if (o.format !== 'eip712') {
+        throw new Error('x402 edge: config.json "offerReceipt.format" must be "eip712"');
+      }
+      if (typeof o.signingKeySecretArn !== 'string' || !o.signingKeySecretArn.startsWith('arn:')) {
+        throw new Error('x402 edge: config.json "offerReceipt.signingKeySecretArn" must be a secret ARN');
+      }
+      if (typeof o.kid !== 'string' || o.kid === '') {
+        throw new Error('x402 edge: config.json "offerReceipt.kid" must be a non-empty string');
+      }
+      if (typeof o.offerValiditySeconds !== 'number' || o.offerValiditySeconds <= 0) {
+        throw new Error('x402 edge: config.json "offerReceipt.offerValiditySeconds" must be a positive number');
+      }
+      if (typeof o.cacheTtlSeconds !== 'number' || o.cacheTtlSeconds < 0) {
+        throw new Error('x402 edge: config.json "offerReceipt.cacheTtlSeconds" must be a non-negative number');
+      }
+    }
+  }
   return c as EdgeConfig;
 }
 
@@ -106,4 +138,5 @@ export const FACILITATOR_URL = CONFIG.facilitatorUrl;
 export const PUBLIC_HOST = CONFIG.publicHost;
 export const SUPPORTED = CONFIG.supported;
 export const FACILITATOR_AUTH = CONFIG.facilitatorAuth;
+export const OFFER_RECEIPT = CONFIG.offerReceipt;
 export const ROUTES: RoutesConfig = CONFIG.routes;

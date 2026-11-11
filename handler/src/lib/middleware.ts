@@ -114,10 +114,26 @@ export function createX402Middleware(config: X402ServerConfig) {
         case HTTPProcessResultType.PAYMENT_VERIFIED:
           console.log('Payment verified, forwarding to origin (settlement deferred)');
 
-          const paymentData = JSON.stringify({
-            payload: result.paymentPayload,
-            requirements: result.paymentRequirements,
-          });
+          // Base payload carries what origin-response needs to settle. When
+          // offer-receipt is enabled we also forward result.declaredExtensions
+          // (the core runs the receipt settlement hook only for declared keys)
+          // and the distributionDomain, so origin-response can rebuild the SAME
+          // adapter/URL the offer used (origin-response events do not carry
+          // distributionDomainName). When disabled we carry only the original
+          // two fields, byte-identical to today.
+          const paymentData = JSON.stringify(
+            config.offerReceipt?.enabled
+              ? {
+                  payload: result.paymentPayload,
+                  requirements: result.paymentRequirements,
+                  declaredExtensions: result.declaredExtensions,
+                  distributionDomain,
+                }
+              : {
+                  payload: result.paymentPayload,
+                  requirements: result.paymentRequirements,
+                }
+          );
 
           request.headers[PENDING_SETTLEMENT_HEADER] = [
             {
@@ -181,10 +197,34 @@ export function createX402Middleware(config: X402ServerConfig) {
       );
 
       const server = await getServer();
-      const settlement = await server.processSettlement(
-        paymentData.payload,
-        paymentData.requirements
-      );
+
+      // Receipt half (opt-in). The offer-receipt enrichSettlementResponse hook
+      // signs a receipt into PAYMENT-RESPONSE only when settlement is called
+      // with declaredExtensions AND a transport context carrying an adapter
+      // whose getUrl() yields the resourceUrl — there is no fallback (unlike the
+      // offer hook). Rebuild the adapter here from the forwarded distributionDomain
+      // (origin-response events lack distributionDomainName) and config.publicHost,
+      // so the receipt's resourceUrl matches the offer's exactly. When disabled
+      // we make the plain 2-arg call, byte-identical to today.
+      let settlement;
+      if (config.offerReceipt?.enabled) {
+        const adapter = new CloudFrontHTTPAdapter(
+          request,
+          paymentData.distributionDomain ?? '',
+          config.publicHost
+        );
+        settlement = await server.processSettlement(
+          paymentData.payload,
+          paymentData.requirements,
+          paymentData.declaredExtensions,
+          { request: { adapter, path: adapter.getPath(), method: adapter.getMethod() } }
+        );
+      } else {
+        settlement = await server.processSettlement(
+          paymentData.payload,
+          paymentData.requirements
+        );
+      }
 
       if (settlement.success) {
         console.log('Payment settled successfully');
