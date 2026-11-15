@@ -258,6 +258,9 @@ variable "secret_replica_reads" {
     Default false: reads go to the ARN's region only. Turn it on only after you
     have added Secrets Manager replicas for the edge regions you serve; with no
     replica the extra attempt only adds a fast failed call before the fallback.
+    A failed replica read is logged and the replica is skipped for 15 minutes
+    in that container, so a missing replica costs one failed call, not one per
+    refresh.
     Replicas share the secret's name and ARN suffix, so the existing IAM grant
     (any region) already covers them. A secret encrypted with a customer
     managed KMS key needs `kms:Decrypt` on the replica's key too.

@@ -46,6 +46,8 @@ export interface SecretSourceConfig {
 const DEFAULT_TIMEOUT_MS = 2000;
 /** A replica that is absent fails fast; do not let a slow one eat the budget. */
 const REPLICA_TIMEOUT_MS = 1000;
+/** After a failed replica read, skip the replica for this long (per container). */
+const REPLICA_BACKOFF_MS = 15 * 60 * 1000;
 
 /** The secret ARN with its region swapped (a replica shares name and suffix). */
 export function arnInRegion(secretArn: string, region: string): string {
@@ -86,6 +88,10 @@ export function createSecretSource(config: SecretSourceConfig) {
 
   let cached: { value: string; expiresAt: number } | null = null;
   let inFlight: Promise<string> | null = null;
+  // Negative cache: when a replica read fails, go straight to the home region
+  // until this time, so a missing replica costs one failed call per container
+  // (per backoff window) rather than one per TTL refresh.
+  let replicaRetryAt = 0;
 
   async function fetchFrom(region: string, timeout: number): Promise<string> {
     const endpoint = `https://secretsmanager.${region}.amazonaws.com/`;
@@ -116,6 +122,18 @@ export function createSecretSource(config: SecretSourceConfig) {
         signal: AbortSignal.timeout(timeout),
       });
     } catch (err) {
+      // Timeouts and network errors never reach the status log below; record
+      // them here so a bad replica is visible rather than a silent slow start.
+      console.log(
+        JSON.stringify({
+          msg: 'x402 facilitator secret fetch failed',
+          executionRegion: process.env.AWS_REGION,
+          secretRegion: region,
+          homeRegion,
+          error: err instanceof Error ? err.name : 'unknown',
+          latencyMs: Date.now() - started,
+        })
+      );
       throw new CredentialsUnavailableError('facilitator auth: GetSecretValue request failed', { cause: err });
     }
     const latencyMs = Date.now() - started;
@@ -149,7 +167,10 @@ export function createSecretSource(config: SecretSourceConfig) {
   }
 
   async function fetchSecret(): Promise<string> {
-    const regions = readRegions(homeRegion, process.env.AWS_REGION, config.readReplicas === true);
+    let regions = readRegions(homeRegion, process.env.AWS_REGION, config.readReplicas === true);
+    if (regions.length > 1 && Date.now() < replicaRetryAt) {
+      regions = [homeRegion];
+    }
     let lastError: unknown;
     for (const region of regions) {
       const isReplica = region !== homeRegion;
@@ -157,6 +178,18 @@ export function createSecretSource(config: SecretSourceConfig) {
         return await fetchFrom(region, isReplica ? Math.min(timeoutMs, REPLICA_TIMEOUT_MS) : timeoutMs);
       } catch (err) {
         lastError = err;
+        if (isReplica) {
+          replicaRetryAt = Date.now() + REPLICA_BACKOFF_MS;
+          console.log(
+            JSON.stringify({
+              msg: 'x402 secret replica unavailable, falling back to home region',
+              executionRegion: process.env.AWS_REGION,
+              replicaRegion: region,
+              homeRegion,
+              retryAfterMs: REPLICA_BACKOFF_MS,
+            })
+          );
+        }
         // Replica miss: fall through to the home region. A home-region failure
         // is final (fail closed).
       }
