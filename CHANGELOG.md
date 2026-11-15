@@ -1,3 +1,7 @@
+## <small>1.5.2 (2026-11-15)</small>
+
+* fix: say so when the PAYMENT-SIGNATURE header cannot be decoded (#21) ([895f7f7](https://github.com/ql4b/terraform-aws-x402-edge/commit/895f7f7)), closes [#21](https://github.com/ql4b/terraform-aws-x402-edge/issues/21) [#20](https://github.com/ql4b/terraform-aws-x402-edge/issues/20)
+
 ## <small>1.5.1 (2026-11-15)</small>
 
 * fix: use the same timeout for replica and home secret reads (#19) ([cb7b84f](https://github.com/ql4b/terraform-aws-x402-edge/commit/cb7b84f)), closes [#19](https://github.com/ql4b/terraform-aws-x402-edge/issues/19) [#18](https://github.com/ql4b/terraform-aws-x402-edge/issues/18)
