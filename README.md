@@ -166,7 +166,9 @@ module "x402_edge" {
 - **Cold start cost.** Each new container makes one `GetSecretValue` call to the
   secret's region, then an authenticated `GET /supported`. `bake_supported` is
   not available with `facilitator_auth` (the plan-time fetch is
-  unauthenticated). Each fetch logs one line with the execution region and
+  unauthenticated); pass `supported_json` instead to serve `/supported` from
+  config and skip that call (a deploy-time snapshot: update it and apply if the
+  facilitator changes what it advertises). Each fetch logs one line with the execution region and
   latency (`x402 facilitator secret fetch`).
 - **Replicas.** The grant covers this secret name in any region, so adding
   Secrets Manager replicas later needs no IAM change; v1 reads only from the
@@ -342,7 +344,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4 |
 | <a name="requirement_archive"></a> [archive](#requirement\_archive) | >= 2.4 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0 |
@@ -351,22 +353,22 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.4 |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0 |
-| <a name="provider_http"></a> [http](#provider\_http) | >= 3.4 |
+| ---- | ------- |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | 2.8.1 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.67.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.2 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_cloudfront_origin_request_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_request_policy) | resource |
 | [aws_iam_role.edge](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.facilitator_secret](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
@@ -382,7 +384,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_facilitator_url"></a> [facilitator\_url](#input\_facilitator\_url) | Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. Facilitators that require an API key need `facilitator_auth` (Coinbase CDP: https://api.cdp.coinbase.com/platform/v2/x402). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator. | `string` | n/a | yes |
 | <a name="input_network"></a> [network](#input\_network) | EVM network for payments, as a CAIP-2 id (e.g. `eip155:8453` for Base mainnet, `eip155:84532` for Base Sepolia). The bundled handler registers only the EVM `exact` scheme, so non-EVM networks are rejected. | `string` | n/a | yes |
 | <a name="input_pay_to"></a> [pay\_to](#input\_pay\_to) | Receiving wallet address (the seller). Every paid route settles to this address. | `string` | n/a | yes |
@@ -412,6 +414,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_runtime"></a> [runtime](#input\_runtime) | Node.js runtime for both edge functions. The bundled handler targets Node.js 22. | `string` | `"nodejs22.x"` | no |
 | <a name="input_stage"></a> [stage](#input\_stage) | ID element. Usually used to indicate role, e.g. 'prod', 'staging', 'source', 'build', 'test', 'deploy', 'release' | `string` | `null` | no |
+| <a name="input_supported_json"></a> [supported\_json](#input\_supported\_json) | Operator-supplied facilitator `/supported` response, as a JSON string,<br/>written into config.json so the edge functions do not call `GET /supported`<br/>on cold start. Unlike `bake_supported` there is no plan-time HTTP request,<br/>so it works with an authenticated facilitator (`facilitator_auth`).<br/><br/>Pass the response body you fetched yourself, or trim it to the kinds this<br/>deployment uses, e.g.<br/>`jsonencode({ kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }], extensions = [], signers = {} })`.<br/>It must contain a non-empty `kinds` array.<br/><br/>Staleness is the trade: the value is a deploy-time snapshot. If the<br/>facilitator later stops advertising the configured network/scheme, verify<br/>fails at request time until you update this value and apply — the 402<br/>challenge is unaffected. Mutually exclusive with `bake_supported`. | `string` | `null` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Additional tags (e.g. `{'BusinessUnit': 'XYZ'}`).<br/>Neither the tag keys nor the tag values will be modified by this module. | `map(string)` | `{}` | no |
 | <a name="input_tenant"></a> [tenant](#input\_tenant) | ID element \_(Rarely used, not included by default)\_. A customer identifier, indicating who this instance of a resource is for | `string` | `null` | no |
 | <a name="input_timeout"></a> [timeout](#input\_timeout) | Timeout (seconds) for both edge functions. Covers the facilitator call on verify and settle. Origin-facing Lambda@Edge events allow up to 30 seconds. | `number` | `5` | no |
@@ -419,7 +422,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_cache_policy_id"></a> [cache\_policy\_id](#output\_cache\_policy\_id) | ID of the managed CachingDisabled cache policy. Paid behaviors must use it: a cache hit skips the origin-request function and would serve paid content unverified. |
 | <a name="output_config_json"></a> [config\_json](#output\_config\_json) | The rendered config.json shipped in the edge zip, for inspection and debugging. |
 | <a name="output_function_names"></a> [function\_names](#output\_function\_names) | Names of the edge functions, keyed by event type. Logs are written to /aws/lambda/us-east-1.<name> in the region nearest each viewer. |

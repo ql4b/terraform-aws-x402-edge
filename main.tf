@@ -35,7 +35,7 @@ resource "terraform_data" "region_guard" {
 # Fetch the facilitator's supported kinds at plan time so the handler can skip
 # the cold-start GET /supported. Only requested when bake_supported = true.
 data "http" "supported" {
-  count = var.bake_supported ? 1 : 0
+  count = var.bake_supported && var.supported_json == null ? 1 : 0
 
   url    = "${var.facilitator_url}/supported"
   method = "GET"
@@ -57,9 +57,13 @@ data "http" "supported" {
 }
 
 locals {
-  # Parsed /supported response, or null when not baking. jsondecode fails the
+  # Parsed /supported response (operator-supplied supported_json, or the
+  # plan-time bake_supported fetch), or null when neither is set. jsondecode fails the
   # plan loudly if the body is not JSON, which is the right outcome.
-  baked_supported = var.bake_supported ? jsondecode(data.http.supported[0].response_body) : null
+  baked_supported = (
+    var.supported_json != null ? jsondecode(var.supported_json) :
+    var.bake_supported ? jsondecode(data.http.supported[0].response_body) : null
+  )
 }
 
 # ---------------------------------------------------------------------------
