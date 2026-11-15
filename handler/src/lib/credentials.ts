@@ -44,8 +44,6 @@ export interface SecretSourceConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 2000;
-/** A replica that is absent fails fast; do not let a slow one eat the budget. */
-const REPLICA_TIMEOUT_MS = 1000;
 /** After a failed replica read, skip the replica for this long (per container). */
 const REPLICA_BACKOFF_MS = 15 * 60 * 1000;
 
@@ -175,7 +173,11 @@ export function createSecretSource(config: SecretSourceConfig) {
     for (const region of regions) {
       const isReplica = region !== homeRegion;
       try {
-        return await fetchFrom(region, isReplica ? Math.min(timeoutMs, REPLICA_TIMEOUT_MS) : timeoutMs);
+        // Same budget for replica and home: a cold in-region read is ~1 s in
+        // Lambda@Edge, and the timeout also bounds reading the body, so a
+        // tighter replica cap aborts reads that were about to succeed. An
+        // absent replica fails fast on its own (404).
+        return await fetchFrom(region, timeoutMs);
       } catch (err) {
         lastError = err;
         if (isReplica) {
