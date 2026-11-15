@@ -1,3 +1,8 @@
+## 1.4.0 (2026-11-15)
+
+* docs: auto-update terraform-docs ([d396f08](https://github.com/ql4b/terraform-aws-x402-edge/commit/d396f08))
+* feat: operator-supplied facilitator /supported (supported_json) (#16) ([97c2f8f](https://github.com/ql4b/terraform-aws-x402-edge/commit/97c2f8f)), closes [#16](https://github.com/ql4b/terraform-aws-x402-edge/issues/16) [#11](https://github.com/ql4b/terraform-aws-x402-edge/issues/11)
+
 ## 1.3.0 (2026-11-11)
 
 * docs: auto-update terraform-docs ([34f4715](https://github.com/ql4b/terraform-aws-x402-edge/commit/34f4715))
