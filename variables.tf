@@ -246,6 +246,8 @@ variable "supported_json" {
     condition     = var.supported_json == null || !var.bake_supported
     error_message = "supported_json and bake_supported are mutually exclusive: set one source for /supported."
   }
+}
+
 variable "secret_replica_reads" {
   type        = bool
   description = <<-EOT
