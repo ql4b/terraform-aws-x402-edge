@@ -102,6 +102,7 @@ locals {
     },
     var.public_host == null ? {} : { publicHost = var.public_host },
     local.baked_supported == null ? {} : { supported = local.baked_supported },
+    var.secret_replica_reads ? { secretReplicaReads = true } : {},
     var.facilitator_auth == null ? {} : {
       facilitatorAuth = {
         type            = var.facilitator_auth.type
@@ -176,7 +177,7 @@ resource "aws_iam_role_policy_attachment" "edge_basic" {
 # Facilitator credentials (facilitator_auth): read-only access to one secret.
 # The region segment is a wildcard so the same grant covers replicas of this
 # secret (same name and suffix) when reads move to the nearest region; v1
-# reads only from the region in the ARN.
+# reads only from the region in the ARN unless secret_replica_reads is on.
 locals {
   facilitator_secret_arn_parts = var.facilitator_auth == null ? [] : split(":", var.facilitator_auth.secret_arn)
   facilitator_secret_resource = var.facilitator_auth == null ? null : join(":", concat(

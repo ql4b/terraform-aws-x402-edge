@@ -171,8 +171,10 @@ module "x402_edge" {
   facilitator changes what it advertises). Each fetch logs one line with the execution region and
   latency (`x402 facilitator secret fetch`).
 - **Replicas.** The grant covers this secret name in any region, so adding
-  Secrets Manager replicas later needs no IAM change; v1 reads only from the
-  region in the ARN.
+  Secrets Manager replicas needs no IAM change. Reads go to the region in the
+  ARN unless `secret_replica_reads = true`, which tries a replica in the
+  execution region first and falls back to the ARN's region. Replicate the
+  secret to the edge regions you serve before turning it on.
 - **KMS.** A secret encrypted with a customer managed key also needs
   `kms:Decrypt` on that key; attach it to `role_arn` yourself.
 - **No IP allowlisting.** Lambda@Edge calls out from shared AWS ranges in many
@@ -344,7 +346,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.4 |
 | <a name="requirement_archive"></a> [archive](#requirement\_archive) | >= 2.4 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.0 |
@@ -353,22 +355,22 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_archive"></a> [archive](#provider\_archive) | >= 2.4 |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.0 |
-| <a name="provider_http"></a> [http](#provider\_http) | >= 3.4 |
+| ---- | ------- |
+| <a name="provider_archive"></a> [archive](#provider\_archive) | 2.8.1 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.67.0 |
+| <a name="provider_http"></a> [http](#provider\_http) | 3.6.2 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
+| ---- | ------ | ------- |
 | <a name="module_this"></a> [this](#module\_this) | cloudposse/label/null | 0.25.0 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_cloudfront_origin_request_policy.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudfront_origin_request_policy) | resource |
 | [aws_iam_role.edge](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.facilitator_secret](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
@@ -384,7 +386,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_facilitator_url"></a> [facilitator\_url](#input\_facilitator\_url) | Base URL of the x402 facilitator that verifies and settles payments (e.g. https://facilitator.payai.network or https://x402.org/facilitator). The facilitator must advertise the `exact` scheme on `network`. Facilitators that require an API key need `facilitator_auth` (Coinbase CDP: https://api.cdp.coinbase.com/platform/v2/x402). It submits settlements on-chain and fronts the gas; whether that is free or billed depends on the facilitator. | `string` | n/a | yes |
 | <a name="input_network"></a> [network](#input\_network) | EVM network for payments, as a CAIP-2 id (e.g. `eip155:8453` for Base mainnet, `eip155:84532` for Base Sepolia). The bundled handler registers only the EVM `exact` scheme, so non-EVM networks are rejected. | `string` | n/a | yes |
 | <a name="input_pay_to"></a> [pay\_to](#input\_pay\_to) | Receiving wallet address (the seller). Every paid route settles to this address. | `string` | n/a | yes |
@@ -413,6 +415,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 | <a name="input_public_host"></a> [public\_host](#input\_public\_host) | Public host name advertised in the challenge `resource.url` (e.g. `api.example.com`). Lambda@Edge only sees the `*.cloudfront.net` distribution domain, so set this when the distribution has a custom alias. Leave null to advertise the CloudFront domain. | `string` | `null` | no |
 | <a name="input_regex_replace_chars"></a> [regex\_replace\_chars](#input\_regex\_replace\_chars) | Terraform regular expression (regex) string.<br/>Characters matching the regex will be removed from the ID elements.<br/>If not set, `"/[^a-zA-Z0-9-]/"` is used to remove all characters other than hyphens, letters and digits. | `string` | `null` | no |
 | <a name="input_runtime"></a> [runtime](#input\_runtime) | Node.js runtime for both edge functions. The bundled handler targets Node.js 22. | `string` | `"nodejs22.x"` | no |
+| <a name="input_secret_replica_reads"></a> [secret\_replica\_reads](#input\_secret\_replica\_reads) | Read the Secrets Manager secrets (`facilitator_auth`, `offer_receipt`) from a<br/>replica in the region the edge function is executing in, falling back to the<br/>region in the secret ARN. Lambda@Edge runs near the viewer, so without a<br/>replica a cold container far from the secret pays a cross-region round trip<br/>(~1.2 s measured eu-central-1 to us-east-1, versus ~0.5 s in-region).<br/><br/>Default false: reads go to the ARN's region only. Turn it on only after you<br/>have added Secrets Manager replicas for the edge regions you serve; with no<br/>replica the extra attempt only adds a fast failed call before the fallback.<br/>Replicas share the secret's name and ARN suffix, so the existing IAM grant<br/>(any region) already covers them. A secret encrypted with a customer<br/>managed KMS key needs `kms:Decrypt` on the replica's key too.<br/><br/>Rotation: replicas sync from the primary; a value read from a replica can<br/>briefly lag a rotation. Credentials still expire after `cache_ttl_seconds`. | `bool` | `false` | no |
 | <a name="input_stage"></a> [stage](#input\_stage) | ID element. Usually used to indicate role, e.g. 'prod', 'staging', 'source', 'build', 'test', 'deploy', 'release' | `string` | `null` | no |
 | <a name="input_supported_json"></a> [supported\_json](#input\_supported\_json) | Operator-supplied facilitator `/supported` response, as a JSON string,<br/>written into config.json so the edge functions do not call `GET /supported`<br/>on cold start. Unlike `bake_supported` there is no plan-time HTTP request,<br/>so it works with an authenticated facilitator (`facilitator_auth`).<br/><br/>Pass the response body you fetched yourself, or trim it to the kinds this<br/>deployment uses, e.g.<br/>`jsonencode({ kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }], extensions = [], signers = {} })`.<br/>It must contain a non-empty `kinds` array.<br/><br/>Staleness is the trade: the value is a deploy-time snapshot. If the<br/>facilitator later stops advertising the configured network/scheme, verify<br/>fails at request time until you update this value and apply — the 402<br/>challenge is unaffected. Mutually exclusive with `bake_supported`. | `string` | `null` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Additional tags (e.g. `{'BusinessUnit': 'XYZ'}`).<br/>Neither the tag keys nor the tag values will be modified by this module. | `map(string)` | `{}` | no |
@@ -422,7 +425,7 @@ cd handler && npm ci && npm run typecheck && npm run build
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_cache_policy_id"></a> [cache\_policy\_id](#output\_cache\_policy\_id) | ID of the managed CachingDisabled cache policy. Paid behaviors must use it: a cache hit skips the origin-request function and would serve paid content unverified. |
 | <a name="output_config_json"></a> [config\_json](#output\_config\_json) | The rendered config.json shipped in the edge zip, for inspection and debugging. |
 | <a name="output_function_names"></a> [function\_names](#output\_function\_names) | Names of the edge functions, keyed by event type. Logs are written to /aws/lambda/us-east-1.<name> in the region nearest each viewer. |

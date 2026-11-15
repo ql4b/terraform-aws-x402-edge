@@ -557,3 +557,27 @@ run "supported_json_and_bake_supported_fail" {
 
   expect_failures = [var.supported_json]
 }
+
+# --- Execution-region secret reads (secret_replica_reads) ---
+
+run "secret_replica_reads_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = !contains(keys(jsondecode(local.edge_config_json)), "secretReplicaReads")
+    error_message = "secretReplicaReads must be omitted by default."
+  }
+}
+
+run "secret_replica_reads_rendered_when_on" {
+  command = plan
+
+  variables {
+    secret_replica_reads = true
+  }
+
+  assert {
+    condition     = jsondecode(local.edge_config_json).secretReplicaReads == true
+    error_message = "secret_replica_reads = true must render secretReplicaReads in config.json."
+  }
+}

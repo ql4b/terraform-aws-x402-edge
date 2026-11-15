@@ -87,6 +87,11 @@ export interface X402ServerConfig {
    */
   offerReceipt?: OfferReceiptEdgeConfig;
   /**
+   * Read Secrets Manager secrets from a replica in the execution region first,
+   * falling back to the ARN's home region (see credentials.ts `readReplicas`).
+   */
+  secretReplicaReads?: boolean;
+  /**
    * Optional pre-fetched facilitator `/supported` response, baked into
    * config.json at plan time. When present, the server does not call the
    * facilitator's `GET /supported` on cold start — the single blocking network
@@ -171,7 +176,7 @@ export async function createX402Server(config: X402ServerConfig): Promise<x402HT
   // register nothing and read no key, so the server is identical to today.
   let routes = config.routes;
   if (config.offerReceipt?.enabled) {
-    const signingKey = await loadSigningKey(config.offerReceipt);
+    const signingKey = await loadSigningKey(config.offerReceipt, config.secretReplicaReads === true);
     const signTypedData: SignTypedDataFn = async (params) => {
       const digest = TypedData.getSignPayload(params as Parameters<typeof TypedData.getSignPayload>[0]);
       const signature = Secp256k1.sign({ payload: digest, privateKey: signingKey });
@@ -209,10 +214,11 @@ export async function createX402Server(config: X402ServerConfig): Promise<x402HT
  * raw hex SecretString or a JSON `{privateKey|signingKey|...}` field — mirrors
  * the observers surface's getSigningKey leniency.
  */
-async function loadSigningKey(offerReceipt: OfferReceiptEdgeConfig): Promise<`0x${string}`> {
+async function loadSigningKey(offerReceipt: OfferReceiptEdgeConfig, readReplicas: boolean): Promise<`0x${string}`> {
   const source = createSecretSource({
     secretArn: offerReceipt.signingKeySecretArn,
     ttlSeconds: offerReceipt.cacheTtlSeconds,
+    readReplicas,
   });
   const raw = (await source.get()).trim();
 
@@ -250,6 +256,7 @@ function facilitatorConfigFor(config: X402ServerConfig): FacilitatorConfig {
     const source = createSecretSource({
       secretArn: config.facilitatorAuth.secretArn,
       ttlSeconds: config.facilitatorAuth.cacheTtlSeconds,
+      readReplicas: config.secretReplicaReads === true,
     });
     return createCdpFacilitatorConfig(config.facilitatorUrl, source);
   }
