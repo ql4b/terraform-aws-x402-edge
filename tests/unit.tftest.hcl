@@ -493,3 +493,67 @@ run "empty_routes_fails" {
 
   expect_failures = [var.routes]
 }
+
+# --- Operator-supplied /supported (supported_json) ---
+
+run "supported_json_embeds_without_plan_time_fetch" {
+  command = plan
+
+  variables {
+    supported_json = jsonencode({
+      kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }]
+    })
+  }
+
+  assert {
+    condition     = jsondecode(local.edge_config_json).supported.kinds[0].network == "eip155:8453"
+    error_message = "supported_json must be embedded into config.json."
+  }
+
+  assert {
+    condition     = length(data.http.supported) == 0
+    error_message = "supported_json must not trigger the plan-time /supported fetch."
+  }
+}
+
+run "supported_json_works_with_facilitator_auth" {
+  command = plan
+
+  variables {
+    facilitator_auth = {
+      type       = "cdp"
+      secret_arn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:x402/cdp-AbCdEf"
+    }
+    supported_json = jsonencode({
+      kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }]
+    })
+  }
+
+  assert {
+    condition     = jsondecode(local.edge_config_json).supported.kinds[0].scheme == "exact"
+    error_message = "supported_json must be accepted together with facilitator_auth."
+  }
+}
+
+run "supported_json_without_kinds_fails" {
+  command = plan
+
+  variables {
+    supported_json = jsonencode({ kinds = [] })
+  }
+
+  expect_failures = [var.supported_json]
+}
+
+run "supported_json_and_bake_supported_fail" {
+  command = plan
+
+  variables {
+    bake_supported = true
+    supported_json = jsonencode({
+      kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }]
+    })
+  }
+
+  expect_failures = [var.supported_json]
+}

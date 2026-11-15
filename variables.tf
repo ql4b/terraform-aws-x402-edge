@@ -217,6 +217,37 @@ variable "bake_supported" {
   default     = false
 }
 
+variable "supported_json" {
+  type        = string
+  description = <<-EOT
+    Operator-supplied facilitator `/supported` response, as a JSON string,
+    written into config.json so the edge functions do not call `GET /supported`
+    on cold start. Unlike `bake_supported` there is no plan-time HTTP request,
+    so it works with an authenticated facilitator (`facilitator_auth`).
+
+    Pass the response body you fetched yourself, or trim it to the kinds this
+    deployment uses, e.g.
+    `jsonencode({ kinds = [{ x402Version = 2, scheme = "exact", network = "eip155:8453" }], extensions = [], signers = {} })`.
+    It must contain a non-empty `kinds` array.
+
+    Staleness is the trade: the value is a deploy-time snapshot. If the
+    facilitator later stops advertising the configured network/scheme, verify
+    fails at request time until you update this value and apply — the 402
+    challenge is unaffected. Mutually exclusive with `bake_supported`.
+  EOT
+  default     = null
+
+  validation {
+    condition     = var.supported_json == null || try(length(jsondecode(var.supported_json).kinds) > 0, false)
+    error_message = "supported_json must be a JSON object with a non-empty \"kinds\" array."
+  }
+
+  validation {
+    condition     = var.supported_json == null || !var.bake_supported
+    error_message = "supported_json and bake_supported are mutually exclusive: set one source for /supported."
+  }
+}
+
 variable "forwarded_headers" {
   type        = list(string)
   description = "Additional viewer headers the created origin request policy forwards to the origin, on top of `payment-signature` (which the edge function needs and is always included). Leave empty for S3 origins."
