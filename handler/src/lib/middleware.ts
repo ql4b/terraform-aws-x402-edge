@@ -4,6 +4,7 @@ import { CloudFrontHTTPAdapter } from './adapter';
 import { toLambdaResponse, LambdaEdgeResponse } from './responses';
 import { createX402Server, type X402ServerConfig } from './server';
 import { CredentialsUnavailableError } from './credentials';
+import { isUndecodablePayment, withErrorMessage, UNDECODABLE_PAYMENT_ERROR } from './payment-errors';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -100,16 +101,29 @@ export function createX402Middleware(config: X402ServerConfig) {
         case HTTPProcessResultType.NO_PAYMENT_REQUIRED:
           return { type: MiddlewareResultType.CONTINUE, request };
 
-        case HTTPProcessResultType.PAYMENT_ERROR:
-          console.log('Payment required or invalid');
+        case HTTPProcessResultType.PAYMENT_ERROR: {
+          // The core reports an undecodable PAYMENT-SIGNATURE as "Payment
+          // required" (it drops the decode error). Say what is actually wrong.
+          const undecodable =
+            result.response.status === 402 && isUndecodablePayment(context.paymentHeader);
+          console.log(
+            undecodable
+              ? 'Payment signature header could not be decoded'
+              : context.paymentHeader
+                ? 'Payment invalid'
+                : 'Payment required'
+          );
           return {
             type: MiddlewareResultType.RESPOND,
             response: toLambdaResponse(
               result.response.status,
-              result.response.headers,
+              undecodable
+                ? withErrorMessage(result.response.headers, UNDECODABLE_PAYMENT_ERROR)
+                : result.response.headers,
               result.response.body
             ),
           };
+        }
 
         case HTTPProcessResultType.PAYMENT_VERIFIED:
           console.log('Payment verified, forwarding to origin (settlement deferred)');
