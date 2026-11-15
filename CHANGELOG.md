@@ -1,3 +1,8 @@
+## 1.5.0 (2026-11-15)
+
+* docs: auto-update terraform-docs ([44ac221](https://github.com/ql4b/terraform-aws-x402-edge/commit/44ac221))
+* feat: execution-region secret reads (secret_replica_reads) (#17) ([d7a56a8](https://github.com/ql4b/terraform-aws-x402-edge/commit/d7a56a8)), closes [#17](https://github.com/ql4b/terraform-aws-x402-edge/issues/17) [#15](https://github.com/ql4b/terraform-aws-x402-edge/issues/15)
+
 ## 1.4.0 (2026-11-15)
 
 * docs: auto-update terraform-docs ([d396f08](https://github.com/ql4b/terraform-aws-x402-edge/commit/d396f08))
