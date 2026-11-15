@@ -248,6 +248,31 @@ variable "supported_json" {
   }
 }
 
+variable "secret_replica_reads" {
+  type        = bool
+  description = <<-EOT
+    Read the Secrets Manager secrets (`facilitator_auth`, `offer_receipt`) from a
+    replica in the region the edge function is executing in, falling back to the
+    region in the secret ARN. Lambda@Edge runs near the viewer, so without a
+    replica a cold container far from the secret pays a cross-region round trip
+    (~1.2 s measured eu-central-1 to us-east-1, versus ~0.5 s in-region).
+
+    Default false: reads go to the ARN's region only. Turn it on only after you
+    have added Secrets Manager replicas for the edge regions you serve; with no
+    replica the extra attempt only adds a fast failed call before the fallback.
+    A failed replica read is logged and the replica is skipped for 15 minutes
+    in that container, so a missing replica costs one failed call, not one per
+    refresh.
+    Replicas share the secret's name and ARN suffix, so the existing IAM grant
+    (any region) already covers them. A secret encrypted with a customer
+    managed KMS key needs `kms:Decrypt` on the replica's key too.
+
+    Rotation: replicas sync from the primary; a value read from a replica can
+    briefly lag a rotation. Credentials still expire after `cache_ttl_seconds`.
+  EOT
+  default     = false
+}
+
 variable "forwarded_headers" {
   type        = list(string)
   description = "Additional viewer headers the created origin request policy forwards to the origin, on top of `payment-signature` (which the edge function needs and is always included). Leave empty for S3 origins."

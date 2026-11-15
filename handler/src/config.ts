@@ -21,6 +21,7 @@
  *     "offerReceipt":   { "enabled": true, "format": "eip712", "signingKeySecretArn": "arn:...",
  *                         "signerDid": "did:web:...", "kid": "did:web:...#key-1",
  *                         "includeTxHash": false, "offerValiditySeconds": 300, "cacheTtlSeconds": 300 },  // optional
+ *     "secretReplicaReads": true,                   // optional
  *     "routes":         { "<x402 route pattern>": RouteConfig, ... }
  *   }
  *
@@ -60,6 +61,11 @@ export interface EdgeConfig {
    * Absent ⇒ no offers or receipts are signed (byte-identical to today).
    */
   offerReceipt?: OfferReceiptEdgeConfig;
+  /**
+   * Optional: read secrets from a Secrets Manager replica in the execution
+   * region first, falling back to the ARN's home region. Absent ⇒ home region.
+   */
+  secretReplicaReads?: boolean;
   /** Payment-gated routes (x402 RoutesConfig). */
   routes: RoutesConfig;
 }
@@ -92,6 +98,9 @@ function loadConfig(): EdgeConfig {
     if (!s || typeof s !== 'object' || !Array.isArray(s.kinds) || s.kinds.length === 0) {
       throw new Error('x402 edge: config.json "supported" must have a non-empty "kinds" array');
     }
+  }
+  if (c.secretReplicaReads !== undefined && typeof c.secretReplicaReads !== 'boolean') {
+    throw new Error('x402 edge: config.json "secretReplicaReads" must be a boolean');
   }
   if (c.facilitatorAuth !== undefined) {
     const a = c.facilitatorAuth as Partial<FacilitatorAuthConfig>;
@@ -139,4 +148,5 @@ export const PUBLIC_HOST = CONFIG.publicHost;
 export const SUPPORTED = CONFIG.supported;
 export const FACILITATOR_AUTH = CONFIG.facilitatorAuth;
 export const OFFER_RECEIPT = CONFIG.offerReceipt;
+export const SECRET_REPLICA_READS = CONFIG.secretReplicaReads;
 export const ROUTES: RoutesConfig = CONFIG.routes;
