@@ -1,3 +1,7 @@
+## <small>1.5.3 (2026-11-16)</small>
+
+* docs: request-flow diagrams (overview + one per phase) (#23) ([1f1fd49](https://github.com/ql4b/terraform-aws-x402-edge/commit/1f1fd49)), closes [#23](https://github.com/ql4b/terraform-aws-x402-edge/issues/23) [#22](https://github.com/ql4b/terraform-aws-x402-edge/issues/22)
+
 ## <small>1.5.2 (2026-11-15)</small>
 
 * fix: say so when the PAYMENT-SIGNATURE header cannot be decoded (#21) ([895f7f7](https://github.com/ql4b/terraform-aws-x402-edge/commit/895f7f7)), closes [#21](https://github.com/ql4b/terraform-aws-x402-edge/issues/21) [#20](https://github.com/ql4b/terraform-aws-x402-edge/issues/20)
