@@ -116,6 +116,46 @@ viewer -> CloudFront (paid behavior, CachingDisabled)
 A client that already knows the terms may send `PAYMENT-SIGNATURE` on its first
 request; the `402` round trip is optional.
 
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as Client or agent
+    participant CF as CloudFront (paid behavior)
+    participant V as origin-request fn (verify)
+    participant O as Your origin
+    participant S as origin-response fn (settle)
+    participant F as x402 facilitator (and chain)
+
+    Note over C,V: 1 - Challenge
+    C->>CF: request, no payment
+    CF->>V: check payment
+    V-->>CF: 402 with price and terms
+    CF-->>C: 402
+
+    Note over C,V: 2 - Verify
+    C->>CF: request + signed payment
+    CF->>V: check payment
+    V->>F: verify
+    F-->>V: valid
+    V->>CF: forward to origin
+
+    Note over CF,O: 3 - Origin
+    CF->>O: the verified request
+    O-->>CF: response
+
+    Note over CF,F: 4 - Settle
+    CF->>S: origin answered below 400
+    S->>F: settle on chain
+    F-->>S: settled
+    S-->>CF: response + receipt header
+    CF-->>C: 200 + response + PAYMENT-RESPONSE
+```
+
+Each phase has its own diagram, with the optional steps (`facilitator_auth`,
+`supported_json`, `offer_receipt`, `secret_replica_reads`) marked, in
+[`docs/request-flow.md`](docs/request-flow.md).
+
+
 Lambda@Edge has no environment variables. The module renders `facilitator_url`,
 `network`, `pay_to`, `public_host` and `routes` into `config.json` and zips it
 next to the generic handler (`assets/edge/index.js`). The handler fails at cold
