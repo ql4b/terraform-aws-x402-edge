@@ -26,3 +26,6 @@ handler/node_modules/
 
 # ROADMAP.md
 ROADMAP.md
+
+# Handler test build output
+handler/test/.build/
