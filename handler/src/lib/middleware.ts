@@ -5,6 +5,7 @@ import { toLambdaResponse, LambdaEdgeResponse } from './responses';
 import { createX402Server, type X402ServerConfig } from './server';
 import { CredentialsUnavailableError } from './credentials';
 import { isUndecodablePayment, withErrorMessage, UNDECODABLE_PAYMENT_ERROR } from './payment-errors';
+import { isCanonicalRequestPath } from './request-path';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -83,6 +84,21 @@ export function createX402Middleware(config: X402ServerConfig) {
     // Security: strip any pre-existing settlement header to prevent a client
     // from injecting a "already-verified" marker and bypassing payment.
     delete request.headers[PENDING_SETTLEMENT_HEADER];
+
+    // Route matching below uses the URI exactly as received, while CloudFront
+    // and the origin may interpret an unusual path differently. Only match and
+    // forward canonical paths; see request-path.ts.
+    if (!isCanonicalRequestPath(request.uri)) {
+      console.log('x402 origin-request: non-canonical path rejected');
+      return {
+        type: MiddlewareResultType.RESPOND,
+        response: toLambdaResponse(
+          400,
+          { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+          { error: 'Bad request' }
+        ),
+      };
+    }
 
     try {
       const server = await getServer();

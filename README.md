@@ -352,6 +352,14 @@ origin-response Lambda@Edge associations cannot also take these.
 **Behavior order matters.** CloudFront uses the first matching behavior, so
 paid patterns must precede broader patterns that match the same paths.
 
+**Paths must be canonical.** Route matching uses the URI as received, so a
+request whose path is not in canonical form is rejected with `400` before any
+route is matched or the origin is reached: dot-segments (`.`, `..`), empty
+segments (`//`), backslashes, control characters, malformed percent-escapes, and
+percent-encoded dots, slashes, backslashes or percent signs (including double
+encoding). This keeps route matching and the origin in agreement about which
+resource a request names.
+
 **Settlement costs gas.** The payer only signs (EIP-3009) and needs no ETH; the
 facilitator submits the transfer on-chain and fronts the gas. Whether that is
 free or billed depends on the facilitator you choose.
