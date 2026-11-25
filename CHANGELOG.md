@@ -1,3 +1,7 @@
+## <small>1.5.4 (2026-11-25)</small>
+
+* fix: reject non-canonical request paths before route matching (#24) ([8fd658a](https://github.com/ql4b/terraform-aws-x402-edge/commit/8fd658a)), closes [#24](https://github.com/ql4b/terraform-aws-x402-edge/issues/24)
+
 ## <small>1.5.3 (2026-11-16)</small>
 
 * docs: request-flow diagrams (overview + one per phase) (#23) ([1f1fd49](https://github.com/ql4b/terraform-aws-x402-edge/commit/1f1fd49)), closes [#23](https://github.com/ql4b/terraform-aws-x402-edge/issues/23) [#22](https://github.com/ql4b/terraform-aws-x402-edge/issues/22)
