@@ -118,7 +118,7 @@ sequenceDiagram
         CF-->>C: 402 (nothing is charged)
     else payment valid
         F-->>OQ: valid
-        OQ->>CF: forward + internal x-x402-pending-settlement header
+        OQ->>CF: forward without PAYMENT-SIGNATURE, + internal x-x402-pending-settlement header
     end
     end
 ```

@@ -6,6 +6,7 @@ import { createX402Server, type X402ServerConfig } from './server';
 import { CredentialsUnavailableError } from './credentials';
 import { isUndecodablePayment, withErrorMessage, UNDECODABLE_PAYMENT_ERROR } from './payment-errors';
 import { isCanonicalRequestPath } from './request-path';
+import { PENDING_SETTLEMENT_HEADER, prepareVerifiedRequestForOrigin } from './forward';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -43,13 +44,6 @@ export type OriginRequestResult =
 export type OriginResponseResult =
   | { type: typeof MiddlewareResultType.CONTINUE; response: CloudFrontResponse }
   | { type: typeof MiddlewareResultType.RESPOND; response: LambdaEdgeResponse };
-
-/**
- * Internal header used to pass verified payment data from origin-request to
- * origin-response. Deferring settlement to origin-response means the client is
- * only charged when the origin actually produced a successful response.
- */
-const PENDING_SETTLEMENT_HEADER = 'x-x402-pending-settlement';
 
 /** True when `error` (or anything in its `cause` chain) is a credentials failure. */
 function isCredentialsError(error: unknown): boolean {
@@ -165,12 +159,15 @@ export function createX402Middleware(config: X402ServerConfig) {
                 }
           );
 
-          request.headers[PENDING_SETTLEMENT_HEADER] = [
-            {
-              key: PENDING_SETTLEMENT_HEADER,
-              value: Buffer.from(paymentData).toString('base64'),
-            },
-          ];
+          const pendingSettlement = Buffer.from(paymentData).toString('base64');
+          const forwardedHeaderBytes = prepareVerifiedRequestForOrigin(request, pendingSettlement);
+          console.log(
+            JSON.stringify({
+              msg: 'x402 forwarding to origin',
+              forwardedHeaderBytes,
+              pendingSettlementBytes: pendingSettlement.length,
+            })
+          );
 
           return { type: MiddlewareResultType.CONTINUE, request };
       }
