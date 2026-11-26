@@ -1,3 +1,7 @@
+## <small>1.5.5 (2026-11-26)</small>
+
+* fix: do not forward PAYMENT-SIGNATURE to the origin after verification (#25) ([615aa89](https://github.com/ql4b/terraform-aws-x402-edge/commit/615aa89)), closes [#25](https://github.com/ql4b/terraform-aws-x402-edge/issues/25)
+
 ## <small>1.5.4 (2026-11-25)</small>
 
 * fix: reject non-canonical request paths before route matching (#24) ([8fd658a](https://github.com/ql4b/terraform-aws-x402-edge/commit/8fd658a)), closes [#24](https://github.com/ql4b/terraform-aws-x402-edge/issues/24)
