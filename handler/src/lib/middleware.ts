@@ -7,7 +7,7 @@ import { CredentialsUnavailableError } from './credentials';
 import { isUndecodablePayment, withErrorMessage, UNDECODABLE_PAYMENT_ERROR } from './payment-errors';
 import { isCanonicalRequestPath } from './request-path';
 import { PENDING_SETTLEMENT_HEADER, prepareVerifiedRequestForOrigin } from './forward';
-import { buildPendingSettlement } from './settlement-context';
+import { buildPendingSettlement, settlementDeclaredExtensions } from './settlement-context';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -213,18 +213,16 @@ export function createX402Middleware(config: X402ServerConfig) {
 
       const server = await getServer();
 
-      // Receipt half (opt-in). Decided by what origin-request carried, not by
-      // this function's config, so settlement follows the terms verified (a
-      // deploy can land between the two). The offer-receipt hook signs a
-      // receipt into PAYMENT-RESPONSE only when settlement gets the declaration
-      // AND a transport context whose adapter yields the resourceUrl. Rebuild
-      // the adapter from the forwarded distributionDomain (origin-response events
-      // lack distributionDomainName) and config.publicHost, so the receipt's
-      // resourceUrl matches the offer's. If this function has offer-receipt off,
-      // the extension is not registered and the hook does not run: no receipt,
-      // settlement unaffected.
+      // Receipt half (opt-in, best effort; see settlementDeclaredExtensions):
+      // the declaration carried from verify, else this function's own when
+      // offer-receipt is on here. The offer-receipt hook signs a receipt into
+      // PAYMENT-RESPONSE only when settlement gets a declaration AND a transport
+      // context whose adapter yields the resourceUrl. Rebuild the adapter from the
+      // forwarded distributionDomain (origin-response events lack it) and
+      // config.publicHost, so the receipt's resourceUrl matches the offer's.
+      const declaredExtensions = settlementDeclaredExtensions(paymentData, config.offerReceipt);
       let settlement;
-      if (paymentData.declaredExtensions) {
+      if (declaredExtensions) {
         const adapter = new CloudFrontHTTPAdapter(
           request,
           paymentData.distributionDomain ?? '',
@@ -233,7 +231,7 @@ export function createX402Middleware(config: X402ServerConfig) {
         settlement = await server.processSettlement(
           paymentData.payload,
           paymentData.requirements,
-          paymentData.declaredExtensions,
+          declaredExtensions,
           { request: { adapter, path: adapter.getPath(), method: adapter.getMethod() } }
         );
       } else {

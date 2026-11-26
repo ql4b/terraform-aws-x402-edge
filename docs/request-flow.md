@@ -49,7 +49,7 @@ sequenceDiagram
     CF-->>C: 200 + response + PAYMENT-RESPONSE
 ```
 
-`origin-request` and `origin-response` are two separate Lambda@Edge functions, each run in the AWS region nearest the viewer. A single request can reach them in different containers, one warm and one cold. The module is stateless: nothing is remembered between verify and settle except the internal `x-x402-pending-settlement` request header that carries the verified payment from the first function to the second. It holds what settlement needs as it was at verify time: the payment payload, the matched requirements and, with offer-receipt, the receipt declaration. Settlement uses these, not the second function's own config, because a deploy can land between the two.
+`origin-request` and `origin-response` are two separate Lambda@Edge functions, each run in the AWS region nearest the viewer. A single request can reach them in different containers, one warm and one cold. The module is stateless: nothing is remembered between verify and settle except the internal `x-x402-pending-settlement` request header that carries the verified payment from the first function to the second. It holds what settlement needs as it was at verify time: the payment payload, the matched requirements, the distribution domain and, with offer-receipt, the receipt settings. Settlement uses these, not the second function's own config, because a deploy can land between the two. Receipts are the one best-effort part: when no receipt settings were carried, the settling function uses its own if offer-receipt is on there, and when it is off there no receipt is signed (see "Receipts are best effort" in the README). Payment never depends on the receipt.
 
 ## Phase 1 - Challenge: the unpaid 402
 

@@ -1,7 +1,7 @@
 // Run with `npm test` (builds src/lib to test/.build first).
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildPendingSettlement, offerReceiptDeclaration } = require('./.build/settlement-context.cjs');
+const { buildPendingSettlement, offerReceiptDeclaration, settlementDeclaredExtensions } = require('./.build/settlement-context.cjs');
 
 const offerReceipt = {
   enabled: true,
@@ -25,10 +25,11 @@ const verified = {
   },
 };
 
-test('offer-receipt off: carries payload and requirements only', () => {
+test('offer-receipt off: carries payload, requirements and the distribution domain, no declaration', () => {
   const out = buildPendingSettlement(verified, undefined, 'd111.cloudfront.net');
-  assert.deepEqual(Object.keys(out).sort(), ['payload', 'requirements']);
-  assert.deepEqual(buildPendingSettlement(verified, { ...offerReceipt, enabled: false }, 'd'), out);
+  assert.deepEqual(Object.keys(out).sort(), ['distributionDomain', 'payload', 'requirements']);
+  assert.equal(out.distributionDomain, 'd111.cloudfront.net');
+  assert.deepEqual(buildPendingSettlement(verified, { ...offerReceipt, enabled: false }, 'd111.cloudfront.net'), out);
 });
 
 test('offer-receipt on: carries the declaration from config and the distribution domain', () => {
@@ -75,4 +76,29 @@ test('the carried payload is smaller than carrying the declared extensions', () 
   }).length;
   const after = JSON.stringify(buildPendingSettlement(verified, offerReceipt, 'd')).length;
   assert.ok(before - after > 1500, `before=${before} after=${after}`);
+});
+
+// settlementDeclaredExtensions: what origin-response settles with.
+
+test('settle: the carried declaration wins over this function\'s config', () => {
+  const carried = buildPendingSettlement(verified, { ...offerReceipt, includeTxHash: false }, 'd');
+  const out = settlementDeclaredExtensions(carried, { ...offerReceipt, includeTxHash: true, offerValiditySeconds: 60 });
+  assert.deepEqual(out, { 'offer-receipt': { includeTxHash: false, offerValiditySeconds: 300 } });
+});
+
+test('settle: nothing carried but offer-receipt on here -> this function\'s declaration (best effort)', () => {
+  const carried = buildPendingSettlement(verified, undefined, 'd');
+  const out = settlementDeclaredExtensions(carried, offerReceipt);
+  assert.deepEqual(out, { 'offer-receipt': { includeTxHash: true, offerValiditySeconds: 300 } });
+});
+
+test('settle: nothing carried and offer-receipt off here -> no declaration', () => {
+  const carried = buildPendingSettlement(verified, undefined, 'd');
+  assert.equal(settlementDeclaredExtensions(carried, undefined), undefined);
+  assert.equal(settlementDeclaredExtensions(carried, { ...offerReceipt, enabled: false }), undefined);
+});
+
+test('settle: an older pending header (no distributionDomain, mutated extensions) still parses', () => {
+  const old = { payload: {}, requirements: {}, declaredExtensions: verified.declaredExtensions };
+  assert.equal(settlementDeclaredExtensions(old, offerReceipt), verified.declaredExtensions);
 });

@@ -7,7 +7,7 @@ import { createOfferReceiptExtension } from '@x402/extensions/offer-receipt';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { buildPendingSettlement } = require('./.build/settlement-context.cjs');
+const { buildPendingSettlement, settlementDeclaredExtensions } = require('./.build/settlement-context.cjs');
 
 const requirements = {
   scheme: 'exact',
@@ -68,4 +68,31 @@ test('with the declaration overwritten by 402 data, the receipt has no hash (the
   } else {
     assert.equal(receipts[0], TX); // fixed SDK (>= 2.29): declaration intact
   }
+});
+
+test('turned on between verify and settle: the receipt is still issued, with the hash', async () => {
+  const { server, receipts, transportContext } = setup(); // offer-receipt registered here
+  const carried = buildPendingSettlement(
+    { paymentPayload: payload, paymentRequirements: requirements },
+    undefined, // off at verify: nothing carried
+    'd'
+  );
+  const declared = settlementDeclaredExtensions(carried, offerReceipt);
+  await server.settlePayment(payload, requirements, declared, transportContext);
+  assert.deepEqual(receipts, [TX]);
+});
+
+test('off at settle: no receipt even if a declaration was carried, settlement still succeeds', async () => {
+  const facilitator = {
+    verify: async () => ({ isValid: true }),
+    settle: async () => ({ success: true, transaction: TX, network: requirements.network, payer: '0x0000000000000000000000000000000000000002' }),
+    getSupported: async () => ({ kinds: [], extensions: [], signers: {} }),
+  };
+  const server = new x402ResourceServer(facilitator); // offer-receipt NOT registered
+  const carried = buildPendingSettlement({ paymentPayload: payload, paymentRequirements: requirements }, offerReceipt, 'd');
+  const result = await server.settlePayment(payload, requirements, carried.declaredExtensions, {
+    request: { adapter: { getUrl: () => 'https://example.com/v1/paid', getMethod: () => 'GET' }, path: '/v1/paid', method: 'GET' },
+  });
+  assert.equal(result.success, true);
+  assert.equal(result.extensions?.['offer-receipt'], undefined);
 });

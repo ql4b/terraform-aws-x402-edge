@@ -22,12 +22,13 @@ export interface PendingSettlement {
   requirements: unknown;
   /** Only with offer-receipt: the declarations settlement acts on. */
   declaredExtensions?: Record<string, unknown>;
-  /** Only with offer-receipt: lets origin-response rebuild the offer's resource URL. */
-  distributionDomain?: string;
+  /** Lets origin-response rebuild the resource URL for a receipt (its events lack it). */
+  distributionDomain: string;
 }
 
 /**
- * Build the pending-settlement payload from a verified request.
+ * Build the pending-settlement payload from a verified request. See
+ * settlementDeclaredExtensions for how origin-response uses it.
  *
  * Settlement must use the terms the payment was verified under, so everything
  * comes from origin-request: origin-response can run a different function
@@ -57,5 +58,30 @@ export function buildPendingSettlement(
         declaredExtensions,
         distributionDomain,
       }
-    : { payload: verified.paymentPayload, requirements: verified.paymentRequirements };
+    : { payload: verified.paymentPayload, requirements: verified.paymentRequirements, distributionDomain };
+}
+
+/**
+ * The declared extensions to settle with, in origin-response.
+ *
+ * A paid exchange spans three invocations that can run different function
+ * versions (and config.json) if a deploy lands in between: the 402 that issued
+ * the signed offer, the verify of the paid retry (origin-request), and settle
+ * (origin-response). Receipts are therefore issued on a best-effort basis:
+ *
+ * - declaration carried from verify: settle with it, so includeTxHash and the
+ *   validity window are the ones in force when the payment was verified;
+ * - nothing carried but offer-receipt on here: settle with this function's own
+ *   declaration, so a client still gets a receipt whenever this function can sign;
+ * - offer-receipt off here: the extension is not registered, so no hook runs and
+ *   no receipt is signed, whatever was carried. The signing key and its grant
+ *   exist only where the feature is on.
+ *
+ * Payment and the resource never depend on the receipt.
+ */
+export function settlementDeclaredExtensions(
+  carried: Pick<PendingSettlement, 'declaredExtensions'>,
+  localOfferReceipt: OfferReceiptEdgeConfig | undefined
+): Record<string, unknown> | undefined {
+  return carried.declaredExtensions ?? offerReceiptDeclaration(localOfferReceipt);
 }

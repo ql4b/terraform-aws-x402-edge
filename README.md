@@ -300,6 +300,25 @@ module "x402_edge" {
   key on the first invocation of a container (reused for `cache_ttl_seconds`);
   signing itself is local CPU, no hot-path network call. The committed bundle
   uses a lean `ox` secp256k1 signer (not `viem`) to limit size growth.
+- **`include_tx_hash`.** When true, the receipt's `transaction` field carries
+  the settlement transaction hash (the same value as `PAYMENT-RESPONSE`
+  `transaction`). When false it is `""`. The field is always part of the signed
+  EIP-712 receipt, so verifiers must accept either.
+- **Receipts are best effort.** A paid exchange spans three invocations: the 402
+  that issues the signed offer, the verify of the paid retry (origin-request) and
+  settle (origin-response). They can run different function versions, and so
+  different `config.json`, when a deploy lands in between. Settlement uses the
+  receipt settings (`include_tx_hash`, `offer_validity_seconds`) in force at
+  verify, carried in the internal pending-settlement header. If none were
+  carried (offer-receipt was off at verify), the settling function uses its own
+  settings when the feature is on there. A receipt is signed whenever the
+  settling function has the feature on; if it is off there, no receipt is
+  returned, since only a function with the feature on holds the signing key and
+  its grant. Payment and the resource never depend on the receipt: a missing
+  receipt does not mean the payment failed.
+- **Key rotation.** The receipt is signed with the settling function's key and
+  `signer_kid`. While rotating, keep both keys in `did.json` until every edge
+  location runs the new version.
 
 ## Routes
 
