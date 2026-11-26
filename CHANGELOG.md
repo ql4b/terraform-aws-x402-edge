@@ -1,3 +1,7 @@
+## <small>1.5.6 (2026-11-26)</small>
+
+* fix: carry only the receipt declaration to settlement (restores receipt tx hash) (#26) ([0fccd03](https://github.com/ql4b/terraform-aws-x402-edge/commit/0fccd03)), closes [#26](https://github.com/ql4b/terraform-aws-x402-edge/issues/26)
+
 ## <small>1.5.5 (2026-11-26)</small>
 
 * fix: do not forward PAYMENT-SIGNATURE to the origin after verification (#25) ([615aa89](https://github.com/ql4b/terraform-aws-x402-edge/commit/615aa89)), closes [#25](https://github.com/ql4b/terraform-aws-x402-edge/issues/25)
