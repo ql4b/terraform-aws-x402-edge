@@ -344,7 +344,11 @@ verification. Use `cache_policy_id`.
 **`payment-signature` must reach the function.** The function sees only the
 headers the origin request policy forwards. Use `origin_request_policy_id`, or
 your own policy that includes `payment-signature`. Add headers your origin needs
-with `forwarded_headers`.
+with `forwarded_headers`. After verification the function removes
+`payment-signature` from the request, so a verified request reaches the origin
+without it (the payment travels in the internal `x-x402-pending-settlement`
+header instead). Keep that in mind for origins with a small request header
+limit, such as Lambda Function URLs (about 10 KB).
 
 **One function per event type.** A behavior that already has origin-request or
 origin-response Lambda@Edge associations cannot also take these.
