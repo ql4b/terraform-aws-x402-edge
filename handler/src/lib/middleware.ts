@@ -7,6 +7,7 @@ import { CredentialsUnavailableError } from './credentials';
 import { isUndecodablePayment, withErrorMessage, UNDECODABLE_PAYMENT_ERROR } from './payment-errors';
 import { isCanonicalRequestPath } from './request-path';
 import { PENDING_SETTLEMENT_HEADER, prepareVerifiedRequestForOrigin } from './forward';
+import { buildPendingSettlement, settlementDeclaredExtensions } from './settlement-context';
 
 /**
  * x402 middleware for Lambda@Edge — verify on origin-request, settle on
@@ -138,25 +139,12 @@ export function createX402Middleware(config: X402ServerConfig) {
         case HTTPProcessResultType.PAYMENT_VERIFIED:
           console.log('Payment verified, forwarding to origin (settlement deferred)');
 
-          // Base payload carries what origin-response needs to settle. When
-          // offer-receipt is enabled we also forward result.declaredExtensions
-          // (the core runs the receipt settlement hook only for declared keys)
-          // and the distributionDomain, so origin-response can rebuild the SAME
-          // adapter/URL the offer used (origin-response events do not carry
-          // distributionDomainName). When disabled we carry only the original
-          // two fields, byte-identical to today.
+          // What origin-response needs to settle, all from verify time (see
+          // buildPendingSettlement): payload and matched requirements, plus with
+          // offer-receipt the receipt declaration from this config and the
+          // distributionDomain (origin-response events do not carry it).
           const paymentData = JSON.stringify(
-            config.offerReceipt?.enabled
-              ? {
-                  payload: result.paymentPayload,
-                  requirements: result.paymentRequirements,
-                  declaredExtensions: result.declaredExtensions,
-                  distributionDomain,
-                }
-              : {
-                  payload: result.paymentPayload,
-                  requirements: result.paymentRequirements,
-                }
+            buildPendingSettlement(result, config.offerReceipt, distributionDomain)
           );
 
           const pendingSettlement = Buffer.from(paymentData).toString('base64');
@@ -225,16 +213,16 @@ export function createX402Middleware(config: X402ServerConfig) {
 
       const server = await getServer();
 
-      // Receipt half (opt-in). The offer-receipt enrichSettlementResponse hook
-      // signs a receipt into PAYMENT-RESPONSE only when settlement is called
-      // with declaredExtensions AND a transport context carrying an adapter
-      // whose getUrl() yields the resourceUrl — there is no fallback (unlike the
-      // offer hook). Rebuild the adapter here from the forwarded distributionDomain
-      // (origin-response events lack distributionDomainName) and config.publicHost,
-      // so the receipt's resourceUrl matches the offer's exactly. When disabled
-      // we make the plain 2-arg call, byte-identical to today.
+      // Receipt half (opt-in, best effort; see settlementDeclaredExtensions):
+      // the declaration carried from verify, else this function's own when
+      // offer-receipt is on here. The offer-receipt hook signs a receipt into
+      // PAYMENT-RESPONSE only when settlement gets a declaration AND a transport
+      // context whose adapter yields the resourceUrl. Rebuild the adapter from the
+      // forwarded distributionDomain (origin-response events lack it) and
+      // config.publicHost, so the receipt's resourceUrl matches the offer's.
+      const declaredExtensions = settlementDeclaredExtensions(paymentData, config.offerReceipt);
       let settlement;
-      if (config.offerReceipt?.enabled) {
+      if (declaredExtensions) {
         const adapter = new CloudFrontHTTPAdapter(
           request,
           paymentData.distributionDomain ?? '',
@@ -243,7 +231,7 @@ export function createX402Middleware(config: X402ServerConfig) {
         settlement = await server.processSettlement(
           paymentData.payload,
           paymentData.requirements,
-          paymentData.declaredExtensions,
+          declaredExtensions,
           { request: { adapter, path: adapter.getPath(), method: adapter.getMethod() } }
         );
       } else {
