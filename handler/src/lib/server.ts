@@ -4,7 +4,6 @@ import { ExactEvmScheme } from '@x402/evm/exact/server';
 import {
   createOfferReceiptExtension,
   createEIP712OfferReceiptIssuer,
-  declareOfferReceiptExtension,
   type SignTypedDataFn,
 } from '@x402/extensions/offer-receipt';
 import * as TypedData from 'ox/TypedData';
@@ -12,6 +11,7 @@ import * as Secp256k1 from 'ox/Secp256k1';
 import * as Signature from 'ox/Signature';
 import { createCdpFacilitatorConfig } from './cdp-auth';
 import { createSecretSource, CredentialsUnavailableError } from './credentials';
+import { offerReceiptDeclaration } from './settlement-context';
 
 /**
  * Pre-fetched facilitator `/supported` response, typed as exactly what the
@@ -189,10 +189,7 @@ export async function createX402Server(config: X402ServerConfig): Promise<x402HT
     // route declares the extension key (declaredExtensions[key] must be
     // defined), so declare it per route — preserving any existing per-route
     // extensions (e.g. bazaar). Mirrors the observers surface.
-    const declaration = declareOfferReceiptExtension({
-      includeTxHash: config.offerReceipt.includeTxHash,
-      offerValiditySeconds: config.offerReceipt.offerValiditySeconds,
-    });
+    const declaration = offerReceiptDeclaration(config.offerReceipt) ?? {};
     routes = Object.fromEntries(
       Object.entries(config.routes).map(([pattern, route]) => [
         pattern,

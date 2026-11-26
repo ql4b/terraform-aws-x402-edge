@@ -10,7 +10,7 @@
   "scripts": {
     "build": "esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --minify --outfile=../assets/edge/index.js --external:@aws-sdk/*",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild src/lib/request-path.ts src/lib/middleware.ts src/lib/forward.ts --bundle --platform=node --target=node22 --format=cjs --out-extension:.js=.cjs --outdir=test/.build --external:@aws-sdk/* --log-level=error && node --test test/request-path.test.cjs test/forward.test.cjs"
+    "test": "esbuild src/lib/request-path.ts src/lib/middleware.ts src/lib/forward.ts src/lib/settlement-context.ts --bundle --platform=node --target=node22 --format=cjs --out-extension:.js=.cjs --outdir=test/.build --external:@aws-sdk/* --log-level=error && node --test test/request-path.test.cjs test/forward.test.cjs test/settlement-context.test.cjs test/receipt-hash.test.mjs"
   },
   "dependencies": {
     "@x402/core": "2.27.0",
